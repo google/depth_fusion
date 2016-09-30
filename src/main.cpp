@@ -19,7 +19,6 @@
 #include <core/vecmath/EuclideanTransform.h>
 #include <core/vecmath/SimilarityTransform.h>
 
-#include "aruco_detector.h"
 #include "control_widget.h"
 #include "input_buffer.h"
 #include "main_widget.h"
@@ -65,105 +64,26 @@ using libcgt::camera_wrappers::openni2::OpenNI2Camera;
 const Vector3i kRegularGridResolution(768); // ~3m^3
 const float kRegularGridVoxelSize = 0.004f; // 4 mm.
 
-// TODO(jiawen): clean this up:
-// When running live, they should all return a unified wrapper.
-// When reading from a stream, should read from a common intrinsic+extrinsic
-// calibration file.
-RGBDCameraParameters DefaultCameraParameters() {
-  RGBDCameraParameters camera_params;
-
-  // TODO(jiawen): move distortion coefficients into RGBDCameraParameters and
-  // also have the camera wrappers return them.
-  std::vector<float> color_dist_coeffs(5, 0.0f);
-
-#if USE_REALSENSE
-  const std::vector<float>& color_dist_coeffs =
-    camera.ColorDistortionCoefficients();
-
-  auto color_from_depth_extrinsics = camera.ColorFromDepthExtrinsicsMeters();
-  Range1f depth_range = Range1f::fromMinMax(0.5f, 3.5f);
-#endif
-
-#if USE_KINECT1X
-  camera_params.color_resolution = kColorResolution;
-  camera_params.color_intrinsics = flipY(camera.colorIntrinsics(),
-    camera_params.color_resolution.y);
-  camera_params.color_range = camera.depthRangeMeters();
-  camera_params.color_range.origin += 0.01f;
-
-  camera_params.depth_resolution = kDepthResolution;
-  camera_params.depth_intrinsics = flipY(camera.depthIntrinsics(),
-    camera_params.depth_resolution.y);
-  camera_params.depth_range = camera.depthRangeMeters();
-
-  camera_params.color_from_depth =
-    KinectCamera::colorFromDepthExtrinsicsMeters();
-  camera_params.depth_from_color = inverse(camera_params.color_from_depth);
-
-#endif
-
-#if USE_OPENNI2
-  OpenNI2Camera camera;
-
-  camera_params.color_resolution = camera.colorConfig().resolution;
-  camera_params.color_intrinsics = flipY(camera.colorIntrinsics(),
-    camera_params.color_resolution.y);
-  camera_params.color_range = OpenNI2Camera::depthRangeMeters();
-  camera_params.color_range.origin += 0.01f;
-
-  camera_params.depth_resolution = camera.depthConfig().resolution;
-  camera_params.depth_intrinsics = flipY(camera.depthIntrinsics(),
-    camera_params.depth_resolution.y);
-  camera_params.depth_range = camera.depthRangeMeters();
-
-  camera_params.color_from_depth = camera.colorFromDepthExtrinsicsMeters();
-  camera_params.depth_from_color = inverse(camera_params.color_from_depth);
-#endif
-
-  return camera_params;
-}
-
 int main(int argc, char* argv[]) {
-  if (argc < 2) {
-    printf("Usage: %s <rgbd_file>\n", argv[0]);
+  if (argc < 3) {
+    printf("Usage: %s <calibration_dir> <rgbd_file>\n", argv[0]);
     return 1;
   }
 
   QApplication app(argc, argv);
 
-  printf("Initializing depth camera...");
-
-#if USE_OPENNI2
-  // TODO(jiawen): move these into RgbdInput and have it load a second file
-  // which is the calibration.
-  StreamConfig g_color_stream_config({ 640, 480 }, 30,
-    libcgt::camera_wrappers::PixelFormat::RGB_U888, false);
-  StreamConfig g_depth_stream_config({ 640, 480 }, 30,
-    libcgt::camera_wrappers::PixelFormat::DEPTH_MM_U16, false);
-  OpenNI2Camera camera(g_color_stream_config, g_depth_stream_config);
-
-#if 0
-  camera.start();
-#endif
-
-#endif
-
-  if (!camera.isValid()) {
-    printf("failed.\n");
-    return 1;
-  }
-  printf("succeeded.\n");
-
-
-  std::string detector_params_filename("detector_params.yaml");
-  ArucoDetector detector(detector_params_filename);
+  // TODO: add different color positioning options using gflags.
 
   const int kBoardWidthPixels = 3300;
   const int kBoardHeightPixels = 2550;
-  Array2D<uint8_t> gl_board_image = detector.GLBoardImage(
-    kBoardWidthPixels, kBoardHeightPixels);
+  Array2D<uint8_t> gl_board_image;
 
-  RGBDCameraParameters camera_params = DefaultCameraParameters();
+  gl_board_image.resize({ kBoardWidthPixels, kBoardHeightPixels });
+  // gl_board_image = detector.GLBoardImage(
+  //  kBoardWidthPixels, kBoardHeightPixels);
+
+  RGBDCameraParameters camera_params =
+	  LoadRGBDCameraParameters(argv[1]);
 
   const SimilarityTransform kInitialWorldFromGrid =
     SimilarityTransform(kRegularGridVoxelSize) *
@@ -174,14 +94,14 @@ int main(int argc, char* argv[]) {
   const EuclideanTransform kInitialDepthCameraFromWorld =
     EuclideanTransform::fromMatrix(
       Matrix4f::lookAt(
-        { 0, 0, camera_params.depth_range.minimum() },
+        { 0, 0, camera_params.depth.depth_range.minimum() },
         Vector3f{ 0 },
         Vector3f{ 0, 1, 0 }.normalized()
       )
     );
 
-  const char* rgbd_stream_filename = argv[1];
-  RgbdInput rgbd_input(InputType::FILE, rgbd_stream_filename);
+  const char* rgbd_stream_filename = argv[2];
+  RgbdInput rgbd_input(RgbdInput::InputType::FILE, rgbd_stream_filename);
   RegularGridFusionPipeline pipeline(camera_params,
     kRegularGridResolution, kRegularGridVoxelSize,
     kInitialWorldFromGrid,
@@ -210,56 +130,60 @@ int main(int argc, char* argv[]) {
   main_widget.pipeline_ = &pipeline;
   main_widget.gl_board_image_ = gl_board_image;
 
-	main_widget.makeCurrent();
-	glewExperimental = true;
-	glewInit();
+  main_widget.makeCurrent();
+  glewExperimental = true;
+  glewInit();
 
   // TODO(jiawen): can move GLState initialization here, since it's actually
   // data.
 
-	main_widget.doneCurrent();
+  main_widget.doneCurrent();
 
   MainController controller(&rgbd_input, &pipeline,
     &control_widget, &main_widget);
 
-	main_widget.show();
+  main_widget.show();
+  return app.exec();
+}
 
-  bool kDoColorTracking = false;
-  const int kWaitMillis = 33;
+#if 0
+// This is live input reading code. Move into rgbd_input.cpp.
+
+bool kDoColorTracking = false;
+const int kWaitMillis = 33;
 
 #if USE_KINECT1X
-  Array2D<uint8x4> bgra_frame(kColorResolution);
-  Array2D<uint16_t> input_depth_frame(kDepthResolution);
-  cv::Mat_<cv::Vec3b> color_vis_ocv(kColorResolution.y, kColorResolution.x);
-  Array2DView<uint8x3> color_vis_view =
-    cvMatAsArray2DView<uint8x3>(color_vis_ocv);
+Array2D<uint8x4> bgra_frame(kColorResolution);
+Array2D<uint16_t> input_depth_frame(kDepthResolution);
+cv::Mat_<cv::Vec3b> color_vis_ocv(kColorResolution.y, kColorResolution.x);
+Array2DView<uint8x3> color_vis_view =
+cvMatAsArray2DView<uint8x3>(color_vis_ocv);
 
-  InputBuffer state(kColorResolution, kDepthResolution);
+InputBuffer state(kColorResolution, kDepthResolution);
 
-  libcgt::kinect1x::KinectCamera::Frame frame;
-  frame.bgra = bgra_frame;
-  frame.extendedDepth = input_depth_frame;
+libcgt::kinect1x::KinectCamera::Frame frame;
+frame.bgra = bgra_frame;
+frame.extendedDepth = input_depth_frame;
 #endif
 
 #if 0
-  // OpenNI2
-  Array2D<uint8x3> rgb_frame(camera.colorConfig().resolution);
-  Array2D<uint16_t> input_depth_frame(camera.depthConfig().resolution);
-  cv::Mat_<cv::Vec3b> color_vis_ocv(camera.colorConfig().resolution.y,
-    camera.colorConfig().resolution.x);
-  Array2DView<uint8x3> color_vis_view =
-    cvMatAsArray2DView<uint8x3>(color_vis_ocv);
+// OpenNI2
+Array2D<uint8x3> rgb_frame(camera.colorConfig().resolution);
+Array2D<uint16_t> input_depth_frame(camera.depthConfig().resolution);
+cv::Mat_<cv::Vec3b> color_vis_ocv(camera.colorConfig().resolution.y,
+	camera.colorConfig().resolution.x);
+Array2DView<uint8x3> color_vis_view =
+cvMatAsArray2DView<uint8x3>(color_vis_ocv);
 
-  OpenNI2Camera::Frame frame;
-  frame.rgb = rgb_frame.writeView();
-  frame.depth = input_depth_frame;
+OpenNI2Camera::Frame frame;
+frame.rgb = rgb_frame.writeView();
+frame.depth = input_depth_frame;
 
-  InputBuffer state(camera.colorConfig().resolution,
-    camera.depthConfig().resolution);
+InputBuffer state(camera.colorConfig().resolution,
+	camera.depthConfig().resolution);
 #endif
 
-	return app.exec();
-}
+#endif
 
 #if 0
 // TODO: This is color based tracking code, which needs to be moved into its

@@ -16,12 +16,14 @@
 #include <cassert>
 
 #include <camera_wrappers/Kinect1x/KinectUtils.h>
+#include <camera_wrappers/PixelFormat.h>
 #include <core/common/ArrayUtils.h>
 #include <core/imageproc/ColorMap.h>
 #include <core/imageproc/Swizzle.h>
 
 #include "input_buffer.h"
 
+using libcgt::camera_wrappers::PixelFormat;
 using libcgt::camera_wrappers::RGBDInputStream;
 using libcgt::camera_wrappers::kinect1x::rawDepthMapToMeters;
 using libcgt::core::arrayutils::copy;
@@ -31,12 +33,43 @@ using libcgt::core::imageproc::RGBToBGR;
 
 RgbdInput::RgbdInput(InputType input_type, const char* filename) {
   // TODO(jiawen): if type is ...
-  file_input_stream_ = std::unique_ptr<RGBDInputStream>(
-    new RGBDInputStream(filename));
+  file_input_stream_ = std::make_unique<RGBDInputStream>(filename);
+
+  // Find the rgb stream.
+  // TODO: take a dependency on cpp11-range
+  for( int i = 0; i < file_input_stream_->metadata().size(); ++i )
+  {
+    const auto& metadata = file_input_stream_->metadata()[ i ];
+    if(metadata.type == StreamType::COLOR &&
+      metadata.format ==  PixelFormat::RGB_U888)
+    {
+      rgb_stream_id_ = i;
+      rgb_size_ = metadata.size;
+      break;
+    }
+  }
+
+  // Find the depth stream.
+  // TODO: take a dependency on cpp11-range
+  for (int i = 0; i < file_input_stream_->metadata().size(); ++i) {
+    const auto& metadata = file_input_stream_->metadata()[i];
+    if (metadata.type == StreamType::DEPTH) {
+      raw_depth_stream_id_ = i;
+      raw_depth_mm_.resize(metadata.size);
+      break;
+    }
+  }
 
   // TODO(jiawen): loop over looking for a depth stream and get its resolution.
   //raw_depth_mm_.resize(file_input_stream_->metadata())
-  raw_depth_mm_.resize({ 640, 480 });
+}
+
+Vector2i RgbdInput::rgbSize() const {
+  return rgb_size_;
+}
+
+Vector2i RgbdInput::depthSize() const {
+  return raw_depth_mm_.size();
 }
 
 // TODO(jiawen): simplify: read only rgb, etc
@@ -52,18 +85,17 @@ void RgbdInput::read(InputBuffer* buffer,
   *rgb_updated = false;
   *depth_updated = false;
 
-  // TODO(jiawen): if type is ...
   uint32_t stream_id;
   int64_t timestamp;
   int frame_index;
   Array1DView<const uint8_t> src = file_input_stream_->read(
     stream_id, frame_index, timestamp);
 
+  // TODO: warn if input buffer is the wrong size.
+
   if (src.notNull()) {
-    // HACK: dimensions, stream id
-    if (stream_id == 0) {
-      // TODO: check stream format.
-      Array2DView<const uint8x3> src_rgb(src.pointer(), { 640, 480 });
+    if (stream_id == rgb_stream_id_) {
+      Array2DView<const uint8x3> src_rgb(src.pointer(), rgb_size_);
       RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
       copy(src_rgb, flipY(buffer->color_rgb.writeView()));
 
@@ -71,9 +103,11 @@ void RgbdInput::read(InputBuffer* buffer,
       buffer->color_frame_index = frame_index;
 
       *rgb_updated = true;
-    } else if (stream_id == 1) {
-      Array2DView<const uint16_t> src_depth(src.pointer(), { 640, 480 });
+    } else if (stream_id == raw_depth_stream_id_ ) {
+      Array2DView<const uint16_t> src_depth(
+        src.pointer(), raw_depth_mm_.size());
       copy(src_depth, raw_depth_mm_.writeView());
+      // TODO: make a set of convert functions for different pixel formats.
       rawDepthMapToMeters(raw_depth_mm_.readView(), buffer->depth_meters,
         false);
 

@@ -15,6 +15,7 @@
 #define MAIN_WIDGET_H
 
 #include <memory>
+#include <unordered_map>
 
 #include <GL/glew.h>
 #include <QGLWidget>
@@ -25,9 +26,9 @@
 #include <core/common/BasicTypes.h>
 
 #define GL_PLATFORM_45
-#include <GL/common/GLProgramManager.h>
 #include <GL/common/GLProgramPipeline.h>
 #include <GL/common/GLSamplerObject.h>
+#include <GL/common/GLSeparableProgram.h>
 #include <GL/GL_45/GLTexture2D.h>
 #include <GL/GL_45/drawables/Axes.h>
 #include <GL/GL_45/drawables/Frustum.h>
@@ -92,42 +93,45 @@ struct GLState {
         xy_coords_(2, depth_resolution.x * depth_resolution.y),
         raycasted_points_(4, depth_resolution.x * depth_resolution.y),
         raycasted_normals_tex_(depth_resolution,
-          GLImageInternalFormat::RGBA32F)
-    {
-      programs_.addFromSourceCode("drawColorVS",
-        GLSeparableProgram::Type::VERTEX_SHADER, kDrawColorVSSrc);
-      programs_.addFromSourceCode("positionOnlyVS",
-        GLSeparableProgram::Type::VERTEX_SHADER, kPositionOnlyVSSrc);
-      programs_.addFromSourceCode("drawTextureVS",
-        GLSeparableProgram::Type::VERTEX_SHADER, kDrawTextureVSSrc);
-      programs_.addFromSourceCode("unprojectPointCloudVS",
-        GLSeparableProgram::Type::VERTEX_SHADER, kUnprojectPointCloudVSSrc);
+          GLImageInternalFormat::RGBA32F) {
+      programs_.emplace("drawColorVS",
+        GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
+          kDrawColorVSSrc.c_str()));
+      programs_.emplace("positionOnlyVS",
+        GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
+          kPositionOnlyVSSrc.c_str()));
+      programs_.emplace("drawTextureVS",
+        GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
+          kDrawTextureVSSrc.c_str()));
+      programs_.emplace("unprojectPointCloudVS",
+        GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
+        kUnprojectPointCloudVSSrc.c_str()));
 
-      programs_.addFromSourceCode("drawColorFS",
-        GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawColorFSSrc);
-      programs_.addFromSourceCode("drawColorDiscardTransparentFS",
-        GLSeparableProgram::Type::FRAGMENT_SHADER,
-        kDrawColorDiscardTransparentFSSrc);
-      programs_.addFromSourceCode("drawSingleColorFS",
-        GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawSingleColorFSSrc);
-      programs_.addFromSourceCode("drawTextureFS",
-        GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawTextureFSSrc);
+      programs_.emplace("drawColorFS",
+        GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
+          kDrawColorFSSrc.c_str()));
+      programs_.emplace("drawColorDiscardTransparentFS",
+        GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
+        kDrawColorDiscardTransparentFSSrc.c_str()));
+      programs_.emplace("drawSingleColorFS",
+        GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
+        kDrawSingleColorFSSrc.c_str()));
+      programs_.emplace("drawTextureFS",
+        GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
+          kDrawTextureFSSrc.c_str()));
 
-      draw_color_.attachProgram(programs_.get("drawColorVS"));
-      draw_color_.attachProgram(programs_.get("drawColorFS"));
+      draw_color_.attachProgram(programs_["drawColorVS"]);
+      draw_color_.attachProgram(programs_["drawColorFS"]);
 
-      draw_single_color_.attachProgram(programs_.get("positionOnlyVS"),
-        GLProgramPipeline::Stage::VERTEX_SHADER_BIT);
-      draw_single_color_.attachProgram(programs_.get("drawSingleColorFS"),
-        GLProgramPipeline::Stage::FRAGMENT_SHADER_BIT);
+      draw_single_color_.attachProgram(programs_["positionOnlyVS"]);
+      draw_single_color_.attachProgram(programs_["drawSingleColorFS"]);
 
-      draw_texture_.attachProgram(programs_.get("drawTextureVS"));
-      draw_texture_.attachProgram(programs_.get("drawTextureFS"));
+      draw_texture_.attachProgram(programs_["drawTextureVS"]);
+      draw_texture_.attachProgram(programs_["drawTextureFS"]);
 
+      unproject_point_cloud_.attachProgram(programs_["unprojectPointCloudVS"]);
       unproject_point_cloud_.attachProgram(
-        programs_.get("unprojectPointCloudVS"));
-      unproject_point_cloud_.attachProgram(
-        programs_.get("drawColorDiscardTransparentFS"));
+        programs_["drawColorDiscardTransparentFS"]);
 
       GLTexture::SwizzleTarget swizzle_rrr1[4] =
       {
@@ -147,10 +151,7 @@ struct GLState {
       linear_sampler_.setWrapModes(GLWrapMode::CLAMP_TO_EDGE);
     }
 
-    // TODO(jiawen): refactor GLProgramManager: it might not be necessary.
-    // Instead, pipelines should reference count programs so it's easy to set
-    // stuff.
-    GLProgramManager programs_;
+    std::unordered_map<std::string, GLSeparableProgram> programs_;
 
     GLProgramPipeline draw_color_;
     GLProgramPipeline draw_single_color_;

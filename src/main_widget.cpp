@@ -54,11 +54,11 @@ void MainWidget::initializeGL() {
   glClearColor(0, 0, 0, 0);
   glEnable(GL_DEPTH_TEST);
 
-  gl_state_ = std::unique_ptr<GLState>(new GLState(
+  gl_state_ = std::make_unique<GLState>(
     gl_board_image_.size(),
-    camera_params_.color_resolution,
-    camera_params_.depth_resolution
-  ));
+    camera_params_.color.resolution,
+    camera_params_.depth.resolution
+  );
 
   gl_state_->board_texture_.set(gl_board_image_);
 
@@ -73,7 +73,7 @@ void MainWidget::initializeGL() {
   {
     auto mb = gl_state_->xy_coords_.mapAttribute<Vector2f>(0);
     Array2DView<Vector2f> points2D(mb.view().pointer(),
-      camera_params_.depth_resolution);
+      camera_params_.depth.resolution);
     for (int y = 0; y < points2D.height(); ++y) {
       for (int x = 0; x < points2D.width(); ++x) {
         points2D[{x, y}] = Vector2f{ x + 0.5f, y + 0.5f };
@@ -102,7 +102,7 @@ void MainWidget::paintGL() {
         gl_state_->color_tracking_vis_);
 
       linearRemapToLuminance(
-        input_buffer_->depth_meters, camera_params_.depth_range,
+        input_buffer_->depth_meters, camera_params_.depth.depth_range,
         Range1f::fromMinMax(0.2f, 1.0f), gl_state_->depth_vis_);
       gl_state_->depth_vis_texture_.set(gl_state_->depth_vis_);
 
@@ -121,14 +121,14 @@ void MainWidget::paintGL() {
     if (true) {
       if (pipeline_->debug_points_world_.notNull()) {
         auto mb = gl_state_->raycasted_points_.mapAttribute<float4>(0);
-        Array2DView<float4> dst2(mb.view().pointer(), camera_params_.depth_resolution);
+        Array2DView<float4> dst2(mb.view().pointer(), camera_params_.depth.resolution);
         copy(pipeline_->debug_points_world_.readView(), dst2);
       }
 
       glPointSize(1.0f);
 
-      GLSeparableProgram& vs = gl_state_->programs_.get("positionOnlyVS");
-      GLSeparableProgram& fs = gl_state_->programs_.get("drawSingleColorFS");
+      GLSeparableProgram& vs = gl_state_->programs_["positionOnlyVS"];
+      GLSeparableProgram& fs = gl_state_->programs_["drawSingleColorFS"];
       vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
       fs.setUniformVector4f(0, { 1, 1, 1, 1 });
       gl_state_->draw_single_color_.bind();
@@ -145,8 +145,8 @@ void MainWidget::paintGL() {
         const int kColorTextureUnit = 0;
         gl_state_->color_tracking_vis_texture_.bind(kColorTextureUnit);
 
-        GLSeparableProgram& vs = gl_state_->programs_.get("drawTextureVS");
-        GLSeparableProgram& fs = gl_state_->programs_.get("drawTextureFS");
+        GLSeparableProgram& vs = gl_state_->programs_["drawTextureVS"];
+        GLSeparableProgram& fs = gl_state_->programs_["drawTextureFS"];
         vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
         fs.setUniformInt(0, kColorTextureUnit);
         gl_state_->draw_texture_.bind();
@@ -165,8 +165,8 @@ void MainWidget::paintGL() {
       const int kColorTextureLocation = 0;
       gl_state_->depth_vis_texture_.bind(kColorTextureUnit);
 
-      GLSeparableProgram& vs = gl_state_->programs_.get("drawTextureVS");
-      GLSeparableProgram& fs = gl_state_->programs_.get("drawTextureFS");
+      GLSeparableProgram& vs = gl_state_->programs_["drawTextureVS"];
+      GLSeparableProgram& fs = gl_state_->programs_["drawTextureFS"];
       vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
       fs.setUniformInt(kColorTextureLocation, kColorTextureUnit);
       gl_state_->draw_texture_.bind();
@@ -288,7 +288,7 @@ void MainWidget::UpdateCameraFrusta() {
 }
 
 void MainWidget::DrawWorldAxes() {
-  GLSeparableProgram& vs = gl_state_->programs_.get("drawColorVS");
+  GLSeparableProgram& vs = gl_state_->programs_["drawColorVS"];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
   gl_state_->draw_color_.bind();
 
@@ -298,7 +298,7 @@ void MainWidget::DrawWorldAxes() {
 }
 
 void MainWidget::DrawCameraFrustaAndTSDFGrid() {
-  GLSeparableProgram& vs = gl_state_->programs_.get("drawColorVS");
+  GLSeparableProgram& vs = gl_state_->programs_["drawColorVS"];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
   gl_state_->draw_color_.bind();
 
@@ -314,8 +314,8 @@ void MainWidget::DrawBoardTexture() {
   const int kColorTextureUnit = 0;
   gl_state_->board_texture_.bind(kColorTextureUnit);
 
-  GLSeparableProgram& vs = gl_state_->programs_.get("drawTextureVS");
-  GLSeparableProgram& fs = gl_state_->programs_.get("drawTextureFS");
+  GLSeparableProgram& vs = gl_state_->programs_["drawTextureVS"];
+  GLSeparableProgram& fs = gl_state_->programs_["drawTextureFS"];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
   fs.setUniformInt(0, kColorTextureUnit);
   gl_state_->draw_texture_.bind();
@@ -340,17 +340,17 @@ void MainWidget::DrawUnprojectedPointCloud() {
   const int kDepthTextureUnit = 0;
   const int kColorTextureUnit = 1;
 
-  GLSeparableProgram& vs = gl_state_->programs_.get("unprojectPointCloudVS");
+  GLSeparableProgram& vs = gl_state_->programs_["unprojectPointCloudVS"];
   vs.setUniformMatrix4f(kFreeCameraFromWorldLocation,
     free_camera_.viewProjectionMatrix());
   vs.setUniformVector4f(kDepthCameraFLPPLocation,
   {
-    camera_params_.depth_intrinsics.focalLength,
-    camera_params_.depth_intrinsics.principalPoint
+    camera_params_.depth.intrinsics.focalLength,
+    camera_params_.depth.intrinsics.principalPoint
   }
   );
   vs.setUniformVector2f(kDepthCameraRangeMinMaxLocation,
-    camera_params_.depth_range.leftRight());
+    camera_params_.depth.depth_range.leftRight());
   vs.setUniformMatrix4f(kDepthWorldFromCameraLocation,
     pipeline_->DepthCamera().worldFromCamera().asMatrix());
   vs.setUniformMatrix4f(kColorClipFromWorldLocation,

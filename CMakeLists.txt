@@ -39,14 +39,14 @@ find_package( Qt5OpenGL )
 find_package( Qt5Widgets )
 
 # libcgt
-include_directories( ../libcgt/build/include )
-include_directories( ../libcgt/build/include/core )
-include_directories( ../libcgt/build/include/GL/common )
-include_directories( ../libcgt/build/include/GL/GL_45 )
-link_directories( ../libcgt/build/lib )
+include_directories( ../libcgt/build/lib/include )
+include_directories( ../libcgt/build/lib/include/core )
+include_directories( ../libcgt/build/lib/include/GL/common )
+include_directories( ../libcgt/build/lib/include/GL/GL_45 )
+link_directories( ../libcgt/build/lib/lib )
 
 # third_party
-include_directories( third_party/Eigen )
+include_directories( third_party )
 
 file( GLOB_RECURSE HEADERS src/*.h src/*.inl src/*.cuh )
 file( GLOB_RECURSE SOURCES_CPP src/*.cpp )

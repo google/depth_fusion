@@ -18,29 +18,28 @@
 
 #include <camera_wrappers/RGBDStream.h>
 
-enum class InputType {
-  KINECT1X,
-  OPENNI2,
-  REALSENSE,
-  FILE,
-};
-
 // TODO(jiawen): Figure out a way to forward declare RGBDInputStream.
 
 struct InputBuffer;
 
-// TODO(jiawen): Make InputType a nested class.
 // TODO(jiawen): When accepting a camera, take in:
 // - an array of StreamConfigs, which is generic.
 // - a calibration file, or empty string for "use factory calibration."
 class RgbdInput {
 public:
 
+  enum class InputType {
+    KINECT1X,
+    OPENNI2,
+    REALSENSE,
+    FILE,
+  };
+
   RgbdInput() = default;
   RgbdInput(InputType input_type, const char* filename);
 
-  // TODO(jiawen): Make it possibly to query this for rgb size, depth size,
-  // intrinsics, etc. It reads it from the metadata
+  Vector2i rgbSize() const;
+  Vector2i depthSize() const;
 
   void read(InputBuffer* state, bool* rgb_updated, bool* depth_updated);
 
@@ -50,6 +49,10 @@ private:
 
   std::unique_ptr<RGBDInputStream> file_input_stream_;
 
+  int rgb_stream_id_ = -1;
+  Vector2i rgb_size_;
+
+  int raw_depth_stream_id_ = -1;
   Array2D<uint16_t> raw_depth_mm_;
 };
 

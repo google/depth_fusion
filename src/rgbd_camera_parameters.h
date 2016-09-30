@@ -15,30 +15,49 @@
 #define RGBD_CAMERA_PARAMETERS_H
 
 #include <core/cameras/Intrinsics.h>
+#include <core/common/Array2D.h>
 #include <core/vecmath/EuclideanTransform.h>
 #include <core/vecmath/Range1f.h>
 #include <core/vecmath/Vector2i.h>
 
-struct RGBDCameraParameters {
+#include <opencv2/core/persistence.hpp>
 
+struct CameraParameters {
   using Intrinsics = libcgt::core::cameras::Intrinsics;
+
+  Vector2i resolution;
+  Intrinsics intrinsics; // y axis points up.
+  std::vector<float> dist_coeffs;
+  Array2D<Vector2f> undistortion_map; // y axis points up.
+  Range1f depth_range; // In meters.
+};
+
+struct RGBDCameraParameters {
   using EuclideanTransform = libcgt::core::vecmath::EuclideanTransform;
 
-  // Color camera.
-  Vector2i color_resolution;
-  Intrinsics color_intrinsics; // y axis points up.
-  Range1f color_range; // For visualization only, in meters.
-
-  // Depth camera.
-  Vector2i depth_resolution;
-  Intrinsics depth_intrinsics; // y axis points up.
-  Range1f depth_range; // In meters.
+  CameraParameters color;
+  CameraParameters depth;
 
   // Extrinsic calibration between the two cameras.
   EuclideanTransform depth_from_color;  // In meters.
   EuclideanTransform color_from_depth;  // In meters.
 
-  // TODO(jiawen): Add a noise model.
+  // TODO: Add a noise model.
 };
+
+// Load a CameraParameters object from an already-opened OpenCV FileStorage
+// object. Reads the keys:
+// <namePrefix>{ImageSize, CameraMatrix_gl, DistCoeffs}.
+CameraParameters LoadCameraIntrinsics(const cv::FileStorage& fs,
+	const std::string& namePrefix);
+
+// Load a RGBDCameraParameters from a directory containing:
+// <dir>/stereo_calibration.yaml,
+// <dir>/color_undistort_map_gl.pfm2
+// <dir>/depth_undistort_map_gl.pfm2
+// Calls LoadCameraIntrinsics() on the YAML file with "color" and 'depth" as
+// prefixes for the intrinsics. Also reads "colorFromDepth_gl" and
+// "depthFromColor_gl" for extrinsics.
+RGBDCameraParameters LoadRGBDCameraParameters(const std::string& dir);
 
 #endif  // RGBD_CAMERA_PARAMETERS_H

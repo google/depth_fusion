@@ -28,41 +28,42 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   const SimilarityTransform& world_from_grid,
   bool initial_pose_depth,
   const EuclideanTransform& initial_camera_from_world) :
-  depth_meters_(camera_params.depth_resolution),
-  smoothed_depth_meters_(camera_params.depth_resolution),
-  incoming_camera_normals_(camera_params.depth_resolution),
-  world_points_(camera_params.depth_resolution),
-  world_normals_(camera_params.depth_resolution),
-  icp_debug_vis_(camera_params.depth_resolution),
+  depth_meters_(camera_params.depth.resolution),
+  smoothed_depth_meters_(camera_params.depth.resolution),
+  incoming_camera_normals_(camera_params.depth.resolution),
+  world_points_(camera_params.depth.resolution),
+  world_normals_(camera_params.depth.resolution),
+  icp_debug_vis_(camera_params.depth.resolution),
 
-  input_buffer_(camera_params.color_resolution,
-    camera_params.depth_resolution),
+  input_buffer_(camera_params.color.resolution,
+    camera_params.depth.resolution),
 
   regular_grid_(grid_resolution, voxel_size, world_from_grid),
 
   camera_params_(camera_params),
   depth_intrinsics_flpp_{
-    camera_params.depth_intrinsics.focalLength,
-    camera_params.depth_intrinsics.principalPoint
+    camera_params.depth.intrinsics.focalLength,
+    camera_params.depth.intrinsics.principalPoint
   },
-  depth_range_(camera_params.depth_range),
+  depth_range_(camera_params.depth.depth_range),
 
-  depth_processor_(camera_params.depth_intrinsics, camera_params.depth_range),
+  depth_processor_(camera_params.depth.intrinsics,
+    camera_params.depth.depth_range),
 
   initial_depth_camera_from_world_(initial_pose_depth ?
     initial_camera_from_world :
     camera_params.depth_from_color * initial_camera_from_world
   ),
 
-  icp_(camera_params.depth_resolution, camera_params.depth_intrinsics,
-    camera_params.depth_range),
+  icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
+    camera_params.depth.depth_range),
 
-  debug_smoothed_depth_meters_(camera_params.depth_resolution),
-  debug_smoothed_depth_vis_(camera_params.depth_resolution),
-  debug_incoming_camera_normals_(camera_params.depth_resolution),
-  debug_points_world_(camera_params.depth_resolution),
-  debug_normals_world_(camera_params.depth_resolution),
-  debug_icp_debug_vis_(camera_params.depth_resolution)
+  debug_smoothed_depth_meters_(camera_params.depth.resolution),
+  debug_smoothed_depth_vis_(camera_params.depth.resolution),
+  debug_incoming_camera_normals_(camera_params.depth.resolution),
+  debug_points_world_(camera_params.depth.resolution),
+  debug_normals_world_(camera_params.depth.resolution),
+  debug_icp_debug_vis_(camera_params.depth.resolution)
 {
 }
 
@@ -75,9 +76,10 @@ void RegularGridFusionPipeline::Reset() {
 
 PerspectiveCamera RegularGridFusionPipeline::ColorCamera() const {
   PerspectiveCamera camera;
-  camera.setFrustumFromIntrinsics(camera_params_.color_intrinsics,
-    camera_params_.color_resolution,
-    camera_params_.color_range.left(), camera_params_.color_range.right());
+  camera.setFrustumFromIntrinsics(camera_params_.color.intrinsics,
+    camera_params_.color.resolution,
+    camera_params_.color.depth_range.left(),
+    camera_params_.color.depth_range.right());
 
   if (color_pose_history_estimated_from_depth_.empty()) {
     camera.setCameraFromWorld(GetColorCameraFromWorld(
@@ -91,9 +93,10 @@ PerspectiveCamera RegularGridFusionPipeline::ColorCamera() const {
 
 PerspectiveCamera RegularGridFusionPipeline::DepthCamera() const {
   PerspectiveCamera camera;
-  camera.setFrustumFromIntrinsics(camera_params_.depth_intrinsics,
-    camera_params_.depth_resolution,
-    camera_params_.depth_range.left(), camera_params_.depth_range.right());
+  camera.setFrustumFromIntrinsics(camera_params_.depth.intrinsics,
+    camera_params_.depth.resolution,
+    camera_params_.depth.depth_range.left(),
+    camera_params_.depth.depth_range.right());
 
   if (depth_pose_history_.empty()) {
     camera.setCameraFromWorld(initial_depth_camera_from_world_);
@@ -177,9 +180,10 @@ bool RegularGridFusionPipeline::UpdatePoseWithICP() {
   return icp_result.valid;
 }
 
+// TODO: use distortion model.
 void RegularGridFusionPipeline::Fuse() {
   regular_grid_.Fuse(
-    depth_intrinsics_flpp_, camera_params_.depth_range,
+    depth_intrinsics_flpp_, camera_params_.depth.depth_range,
     depth_pose_history_.back().camera_from_world.asMatrix(),
     depth_meters_
   );
