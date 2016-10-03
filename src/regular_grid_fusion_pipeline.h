@@ -37,6 +37,7 @@ class RegularGridFusionPipeline {
 
   // TODO(jiawen): Allow initial pose using color from world or
   // depth from world but not both.
+  //
   RegularGridFusionPipeline(
     const RGBDCameraParameters& camera_params,
     const Vector3i& grid_resolution, float voxel_size,
@@ -48,6 +49,8 @@ class RegularGridFusionPipeline {
   void Reset();
 
   void NotifyInputUpdated(bool color_updated, bool depth_updated);
+
+  InputBuffer& GetInputBuffer();
 
   PerspectiveCamera ColorCamera() const;
   PerspectiveCamera DepthCamera() const;
@@ -80,8 +83,6 @@ class RegularGridFusionPipeline {
   // Return CameraFromWorld.
   const std::vector<PoseFrame>& DepthPoseHistory() const;
 
-  InputBuffer input_buffer_;
-
   RegularGridTSDF regular_grid_;
 
   // Incoming depth frame in meters.
@@ -106,29 +107,30 @@ class RegularGridFusionPipeline {
   Array2D<uint8x4> debug_icp_debug_vis_;
 
  private:
+  InputBuffer input_buffer_;
 
-   DepthProcessor depth_processor_;
+  DepthProcessor depth_processor_;
 
-   // TODO: PoseEstimator class
-   const int kMaxSuccessiveFailuresBeforeReset = 10;
-   int num_successive_failures_ = 0;
-   ProjectivePointPlaneICP icp_;
+  // TODO: PoseEstimator class
+  const int kMaxSuccessiveFailuresBeforeReset = 10;
+  int num_successive_failures_ = 0;
+  ProjectivePointPlaneICP icp_;
 
-   const EuclideanTransform initial_depth_camera_from_world_;
-   // Stores camera_from_world.
-   std::vector<PoseFrame> depth_pose_history_;
-   std::vector<PoseFrame> color_pose_history_estimated_from_depth_;
+  const EuclideanTransform initial_depth_camera_from_world_;
+  // Stores camera_from_world.
+  std::vector<PoseFrame> depth_pose_history_;
+  std::vector<PoseFrame> color_pose_history_estimated_from_depth_;
 
-   const RGBDCameraParameters camera_params_;
-   // camera_params_.depth_intrinsics_, stored as a Vector4f.
-   const Vector4f depth_intrinsics_flpp_;
-   const Range1f depth_range_;
+  const RGBDCameraParameters camera_params_;
+  // camera_params_.depth_intrinsics_, stored as a Vector4f.
+  const Vector4f depth_intrinsics_flpp_;
+  const Range1f depth_range_;
 
-   // Using the known extrinsic calibration between the color and depth
-   // cameras, convert a depth camera_from_world pose to a color
-   // camera_from_world pose.
-   EuclideanTransform GetColorCameraFromWorld(
-     const EuclideanTransform& depth_camera_from_world) const;
+  // Using the known extrinsic calibration between the color and depth
+  // cameras, convert a depth camera_from_world pose to a color
+  // camera_from_world pose.
+  EuclideanTransform GetColorCameraFromWorld(
+    const EuclideanTransform& depth_camera_from_world) const;
 };
 
 #endif  // REGULAR_GRID_FUSION_PIPELINE_H

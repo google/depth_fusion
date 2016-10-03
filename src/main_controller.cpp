@@ -44,7 +44,7 @@ MainController::MainController(
 void MainController::OnReadInput() {
   bool rgb_updated;
   bool depth_updated;
-  input_->read(&(pipeline_->input_buffer_), &rgb_updated, &depth_updated);
+  input_->read(&(pipeline_->GetInputBuffer()), &rgb_updated, &depth_updated);
 
   pipeline_->NotifyInputUpdated(rgb_updated, depth_updated);
 

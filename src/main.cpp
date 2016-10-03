@@ -33,36 +33,44 @@ using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::SimilarityTransform;
 
-#define USE_REALSENSE 0
-#define USE_KINECT1X 0
-#define USE_OPENNI2 1
-
-#if USE_KINECT1X
-#include <camera_wrappers/Kinect1x/KinectCamera.h>
-const Vector2i kColorResolution = { 640, 480 };
-const int kColorFps = 30;
-const Vector2i kDepthResolution = { 640, 480 };
-const int kDepthFps = 30;
-using libcgt::kinect1x::KinectCamera;
-#endif
-
-#if USE_REALSENSE
-#include <camera_wrappers/RealSense/RealSenseCamera.h>
-const Vector2i kColorResolution = { 640, 480 };
-const int kColorFps = 60;
-const Vector2i kDepthResolution = { 480, 360 };
-const int kDepthFps = 60;
-#endif
-
-#if USE_OPENNI2
-#include <camera_wrappers/OpenNI2/OpenNI2Camera.h>
-using libcgt::camera_wrappers::openni2::OpenNI2Camera;
-#endif
-
 //const Vector3i kRegularGridResolution(512); ~2m^3
 //const Vector3i kRegularGridResolution(640); // ~2.5m^3
 const Vector3i kRegularGridResolution(768); // ~3m^3
 const float kRegularGridVoxelSize = 0.004f; // 4 mm.
+
+std::unique_ptr<GLState> InitializeGLState(
+  Array2DView<const uint8_t> board_image,
+  const RGBDCameraParameters& camera_params,
+  const RegularGridFusionPipeline& pipeline) {
+  auto gl_state = std::make_unique<GLState>(
+	board_image.size(),
+	camera_params.color.resolution,
+  	camera_params.depth.resolution
+  );
+  
+  gl_state->board_texture_.set(board_image);
+  
+  gl_state->tracked_rgb_camera_.updateColor({ 1, 0, 0, 1 });
+  gl_state->tracked_depth_camera_.updateColor({ 0, 0, 1, 1 });
+  
+  gl_state->tsdf_bbox_.updatePositions(
+  	pipeline.regular_grid_.BoundingBox(),
+  	pipeline.regular_grid_.WorldFromGrid().asMatrix());
+  
+  // Initialize gl_state_->xy_coords_.
+  {
+  	auto mb = gl_state->xy_coords_.mapAttribute<Vector2f>(0);
+  	Array2DView<Vector2f> points2D(mb.view().pointer(),
+  		camera_params.depth.resolution);
+  	for (int y = 0; y < points2D.height(); ++y) {
+  		for (int x = 0; x < points2D.width(); ++x) {
+  			points2D[{x, y}] = Vector2f{ x + 0.5f, y + 0.5f };
+  		}
+  	}
+  }
+
+  return gl_state;
+}
 
 int main(int argc, char* argv[]) {
   if (argc < 3) {
@@ -72,18 +80,15 @@ int main(int argc, char* argv[]) {
 
   QApplication app(argc, argv);
 
-  // TODO: add different color positioning options using gflags.
-
-  const int kBoardWidthPixels = 3300;
-  const int kBoardHeightPixels = 2550;
-  Array2D<uint8_t> gl_board_image;
-
-  gl_board_image.resize({ kBoardWidthPixels, kBoardHeightPixels });
-  // gl_board_image = detector.GLBoardImage(
-  //  kBoardWidthPixels, kBoardHeightPixels);
-
+  // TODO: switch these to use gflags.
   RGBDCameraParameters camera_params =
 	  LoadRGBDCameraParameters(argv[1]);
+  const char* rgbd_stream_filename = argv[2];
+
+  // TODO: add different color pose tracking options using gflags.
+  const int kBoardWidthPixels = 3300;
+  const int kBoardHeightPixels = 2550;
+  Array2D<uint8_t> board_image{ { kBoardWidthPixels, kBoardHeightPixels } };
 
   const SimilarityTransform kInitialWorldFromGrid =
     SimilarityTransform(kRegularGridVoxelSize) *
@@ -100,7 +105,6 @@ int main(int argc, char* argv[]) {
       )
     );
 
-  const char* rgbd_stream_filename = argv[2];
   RgbdInput rgbd_input(RgbdInput::InputType::FILE, rgbd_stream_filename);
   RegularGridFusionPipeline pipeline(camera_params,
     kRegularGridResolution, kRegularGridVoxelSize,
@@ -115,6 +119,7 @@ int main(int argc, char* argv[]) {
   format.setVersion(4, 5);
   format.setProfile(QGLFormat::CoreProfile);
   MainWidget main_widget(camera_params, format);
+  main_widget.SetPipeline(&pipeline);
 
   const int window_width = 1920;
   const int window_height = 1200;
@@ -123,25 +128,19 @@ int main(int argc, char* argv[]) {
   main_widget.move(x, y);
   main_widget.resize(window_width, window_height);
 
-  // HACK:
-  // 0. pass pipeline in to constructor
-  // 1. shouldn't give it input_buffer, it can read it off the pipeline
-  main_widget.input_buffer_ = &pipeline.input_buffer_;
-  main_widget.pipeline_ = &pipeline;
-  main_widget.gl_board_image_ = gl_board_image;
-
+  // Annoying call sequence to do OpenGL initialization here.
   main_widget.makeCurrent();
   glewExperimental = true;
   glewInit();
 
-  // TODO(jiawen): can move GLState initialization here, since it's actually
-  // data.
+  std::unique_ptr<GLState> gl_state = InitializeGLState(
+	board_image, camera_params, pipeline);
+  main_widget.SetGLState(std::move(gl_state));
 
   main_widget.doneCurrent();
 
   MainController controller(&rgbd_input, &pipeline,
     &control_widget, &main_widget);
-
   main_widget.show();
   return app.exec();
 }

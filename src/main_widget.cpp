@@ -47,39 +47,20 @@ MainWidget::MainWidget(const RGBDCameraParameters& camera_params,
     kFreeCameraFovYRadians, aspectRatio, kFreeCameraZNear, kFreeCameraZFar));
 }
 
+void MainWidget::SetGLState(std::unique_ptr<GLState> gl_state) {
+  gl_state_ = std::move(gl_state);
+}
+
+void MainWidget::SetPipeline(RegularGridFusionPipeline* pipeline) {
+  pipeline_ = pipeline;
+}
+
 void MainWidget::initializeGL() {
   // TODO(jiawen): Investigate (with a debug context) why there is an invalid
   // enum on startup.
   GLUtilities::printLastError();
   glClearColor(0, 0, 0, 0);
   glEnable(GL_DEPTH_TEST);
-
-  gl_state_ = std::make_unique<GLState>(
-    gl_board_image_.size(),
-    camera_params_.color.resolution,
-    camera_params_.depth.resolution
-  );
-
-  gl_state_->board_texture_.set(gl_board_image_);
-
-  gl_state_->tracked_rgb_camera_.updateColor({ 1, 0, 0, 1 });
-  gl_state_->tracked_depth_camera_.updateColor({ 0, 0, 1, 1 });
-
-  gl_state_->tsdf_bbox_.updatePositions(
-    pipeline_->regular_grid_.BoundingBox(),
-    pipeline_->regular_grid_.WorldFromGrid().asMatrix());
-
-  // Initialize gl_state_->xy_coords_.
-  {
-    auto mb = gl_state_->xy_coords_.mapAttribute<Vector2f>(0);
-    Array2DView<Vector2f> points2D(mb.view().pointer(),
-      camera_params_.depth.resolution);
-    for (int y = 0; y < points2D.height(); ++y) {
-      for (int x = 0; x < points2D.width(); ++x) {
-        points2D[{x, y}] = Vector2f{ x + 0.5f, y + 0.5f };
-      }
-    }
-  }
 }
 
 // virtual
@@ -90,23 +71,24 @@ void MainWidget::keyPressEvent(QKeyEvent* e) {
 void MainWidget::paintGL() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (input_buffer_ != nullptr) {
-      // TODO(jiawen): notify that it has a new input. Mark texture as dirty.
-      gl_state_->color_texture_.set(input_buffer_->color_rgb);
-      gl_state_->depth_texture_.set(input_buffer_->depth_meters);
-
-      // TODO(jiawen): Ask the pipeline for a visualization of color tracking.
-      copy(input_buffer_->color_rgb.readView(),
-        gl_state_->color_tracking_vis_.writeView());
-      gl_state_->color_tracking_vis_texture_.set(
-        gl_state_->color_tracking_vis_);
-
-      linearRemapToLuminance(
-        input_buffer_->depth_meters, camera_params_.depth.depth_range,
-        Range1f::fromMinMax(0.2f, 1.0f), gl_state_->depth_vis_);
-      gl_state_->depth_vis_texture_.set(gl_state_->depth_vis_);
-
-      gl_state_->compatibility_map_texture_.set(pipeline_->debug_icp_debug_vis_);
+    if (pipeline_ != nullptr) {
+	  InputBuffer& input_buffer = pipeline_->GetInputBuffer();
+        // TODO(jiawen): notify that it has a new input. Mark texture as dirty.
+        gl_state_->color_texture_.set(input_buffer.color_rgb);
+        gl_state_->depth_texture_.set(input_buffer.depth_meters);
+	    
+        // TODO(jiawen): Ask the pipeline for a visualization of color tracking.
+        copy(input_buffer.color_rgb.readView(),
+          gl_state_->color_tracking_vis_.writeView());
+        gl_state_->color_tracking_vis_texture_.set(
+          gl_state_->color_tracking_vis_);
+	    
+        linearRemapToLuminance(
+          input_buffer.depth_meters, camera_params_.depth.depth_range,
+          Range1f::fromMinMax(0.2f, 1.0f), gl_state_->depth_vis_);
+        gl_state_->depth_vis_texture_.set(gl_state_->depth_vis_);
+	    
+        gl_state_->compatibility_map_texture_.set(pipeline_->debug_icp_debug_vis_);
     }
 
     // TODO(jiawen): only if kf has new stuff...
@@ -344,10 +326,10 @@ void MainWidget::DrawUnprojectedPointCloud() {
   vs.setUniformMatrix4f(kFreeCameraFromWorldLocation,
     free_camera_.viewProjectionMatrix());
   vs.setUniformVector4f(kDepthCameraFLPPLocation,
-  {
-    camera_params_.depth.intrinsics.focalLength,
-    camera_params_.depth.intrinsics.principalPoint
-  }
+    {
+      camera_params_.depth.intrinsics.focalLength,
+      camera_params_.depth.intrinsics.principalPoint
+    }
   );
   vs.setUniformVector2f(kDepthCameraRangeMinMaxLocation,
     camera_params_.depth.depth_range.leftRight());

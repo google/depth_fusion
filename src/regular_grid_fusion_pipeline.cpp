@@ -129,6 +129,10 @@ void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
   }
 }
 
+InputBuffer& RegularGridFusionPipeline::GetInputBuffer() {
+  return input_buffer_;
+}
+
 bool RegularGridFusionPipeline::UpdatePoseWithICP() {
   // On the first frame, initialize history with default.
   if (depth_pose_history_.empty()) {
