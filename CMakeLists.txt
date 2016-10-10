@@ -53,6 +53,7 @@ file( GLOB_RECURSE SOURCES_CPP src/*.cpp )
 file( GLOB_RECURSE SOURCES_CU src/*.cu )
 
 CUDA_ADD_EXECUTABLE( depth_fusion ${HEADERS} ${SOURCES_CPP} ${SOURCES_CU} )
+target_compile_definitions( depth_fusion PRIVATE GL_PLATFORM_45 )
 set_property( TARGET depth_fusion PROPERTY CXX_STANDARD 11 )
 
 # TODO: use import and export library
