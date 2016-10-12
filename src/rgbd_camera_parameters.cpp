@@ -16,7 +16,7 @@
 #include <core/vecmath/EuclideanTransform.h>
 #include <io/PortableFloatMapIO.h>
 #include <opencv_interop/VecmathUtils.h>
-#include <third_party/pystring.h>
+#include <pystring/pystring.h>
 
 using namespace pystring;
 using namespace libcgt::core::vecmath;

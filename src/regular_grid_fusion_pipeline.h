@@ -19,7 +19,7 @@
 #include <core/vecmath/Vector2i.h>
 #include <core/vecmath/Vector3i.h>
 #include <core/vecmath/EuclideanTransform.h>
-#include <CUDA/DeviceArray2D.h>
+#include <cuda/DeviceArray2D.h>
 
 #include "regular_grid_tsdf.h"
 #include "rgbd_camera_parameters.h"
@@ -40,17 +40,26 @@ class RegularGridFusionPipeline {
   //
   RegularGridFusionPipeline(
     const RGBDCameraParameters& camera_params,
-    const Vector3i& grid_resolution, float voxel_size,
+    const Vector3i& grid_resolution,
     const SimilarityTransform& world_from_grid,
     // true if it's the depth camera, false if it's the color camera
     bool initial_pose_depth,
     const EuclideanTransform& initial_camera_from_world);
 
+  Array2DView<const uint8_t> GetBoardImage() const;
+  void SetBoardImage(Array2D<uint8_t> board_image);
+
   void Reset();
+
+  const RGBDCameraParameters& GetCameraParameters() const;
 
   void NotifyInputUpdated(bool color_updated, bool depth_updated);
 
   InputBuffer& GetInputBuffer();
+
+  // TODO: oriented box class
+  Box3f TSDFGridBoundingBox() const;
+  const SimilarityTransform& TSDFWorldFromGridTransform() const;
 
   PerspectiveCamera ColorCamera() const;
   PerspectiveCamera DepthCamera() const;
@@ -69,8 +78,9 @@ class RegularGridFusionPipeline {
   // grid from the current pose.
   void Raycast();
 
-  // TODO(jiawen):
-  //void Raycast(camera c)
+  void Raycast(const PerspectiveCamera& camera,
+               DeviceArray2D<float4>& world_points,
+               DeviceArray2D<float4>& world_normals);
 
   TriangleMesh Triangulate() const;
 
@@ -83,35 +93,44 @@ class RegularGridFusionPipeline {
   // Return CameraFromWorld.
   const std::vector<PoseFrame>& DepthPoseHistory() const;
 
-  RegularGridTSDF regular_grid_;
+  const DeviceArray2D<float>& SmoothedDepthMeters() const;
 
+  // In camera space.
+  const DeviceArray2D<float4>& SmoothedIncomingNormals() const;
+
+  const DeviceArray2D<uchar4>& PoseEstimationVisualization() const;
+
+  // In world space.
+  const DeviceArray2D<float4>& RaycastNormals() const;
+
+ private:
+  // CPU input buffers.
+  InputBuffer input_buffer_;
+
+  // ----- Input copied to the GPU -----
   // Incoming depth frame in meters.
   DeviceArray2D<float> depth_meters_;
+
+  // ----- Pipeline intermediates -----
+
   // Incoming depth smoothed using a bilateral filter.
   DeviceArray2D<float> smoothed_depth_meters_;
   // Incoming camera-space normals, estimated from smoothed depth.
   DeviceArray2D<float4> incoming_camera_normals_;
 
+  // Pose estimation visualization.
+  DeviceArray2D<uchar4> pose_estimation_vis_;
+
   // Raycasted world-space points and normals.
   DeviceArray2D<float4> world_points_;
   DeviceArray2D<float4> world_normals_;
-  DeviceArray2D<uchar4> icp_debug_vis_;
-
-  // TODO(jiawen): cuda interop / store elsewhere
-  Array2D<float> debug_smoothed_depth_meters_;
-  Array2D<uint8_t> debug_smoothed_depth_vis_;
-  Array2D<Vector4f> debug_incoming_camera_normals_;
-
-  Array2D<float4> debug_points_world_;
-  Array2D<float4> debug_normals_world_;
-  Array2D<uint8x4> debug_icp_debug_vis_;
-
- private:
-  InputBuffer input_buffer_;
 
   DepthProcessor depth_processor_;
 
+  RegularGridTSDF regular_grid_;
+
   // TODO: PoseEstimator class
+  Array2D<uint8_t> board_image_;
   const int kMaxSuccessiveFailuresBeforeReset = 10;
   int num_successive_failures_ = 0;
   ProjectivePointPlaneICP icp_;

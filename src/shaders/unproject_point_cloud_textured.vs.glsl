@@ -14,21 +14,16 @@ R"(
 // limitations under the License.
 #version 450
 
-layout(location = 0) uniform mat4 uClipFromWorld; // Viewing camera.
-
-// Depth camera intrinsics.
+// TODO(jiawen): rename these.
+layout(location = 0) uniform mat4 uCameraFromWorld;
 layout(location = 1) uniform vec4 uDepthCameraFLPP;
 layout(location = 2) uniform vec2 uDepthCameraRangeMinMax;
-// Depth camera extrinsics.
 layout(location = 3) uniform mat4 uDepthWorldFromCamera;
+layout(location = 4) uniform mat4 uColorClipFromWorld;
 
-// Depth map texture.
-layout(location = 4) uniform sampler2D uDepthSampler;
+layout(location = 5) uniform sampler2D uDepthSampler;
+layout(location = 6) uniform sampler2D uColorSampler;
 
-// Color of the point.
-layout(location = 5) uniform vec4 uPointColor = vec4(1.0);
-
-// Incoming position is a point.
 layout(location = 0) in vec2 aPos;
 
 out gl_PerVertex
@@ -44,8 +39,8 @@ out VertexData
 void main()
 {
     // Unproject using focal length and principal point.
-    // x = fx * X / Z + px
-    // --> X = Z * (x - px) / fx.
+    // x = f * X / Z + cx
+    // --> X = Z * (x - cx) / f.
 
     // Get the texture coordinates for this point.
     vec2 st = aPos / textureSize(uDepthSampler, 0);
@@ -71,7 +66,28 @@ void main()
     // Now transform it into world coordinates.
     vec4 xyzw_world = uDepthWorldFromCamera * xyzw_depth_camera;
 
-    gl_Position = uClipFromWorld * xyzw_world;
-    vColor = within_depth_range * uPointColor;
+    // Transform the point into color camera coordinates.
+    vec4 xyzw_color_clip = uColorClipFromWorld * xyzw_world;
+    vec2 st_color = xyzw_color_clip.xy / xyzw_color_clip.w;
+    st_color = 0.5 * (st_color + vec2(1));
+
+    vec4 output_color;
+    if (st_color.x >= 0 && st_color.y >= 0 &&
+        st_color.x <= 1 && st_color.y <= 1 &&
+        xyzw_color_clip.w > 0)
+    {
+        // TODO(jiawen): use texture2DProj.
+        // TODO(jiawen): use sampler objects correctly.
+        output_color = within_depth_range * texture2D(uColorSampler, st_color);
+    }
+    else
+    {
+        // If the point is visible but has no corresponding color pixel,
+        // color it red.
+        output_color = within_depth_range * vec4(1, 0, 0, 1);
+    }
+
+    gl_Position = uCameraFromWorld * xyzw_world;
+    vColor = output_color;
 }
 )"

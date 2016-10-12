@@ -580,14 +580,14 @@ void MarchingCubes(Array3DView<const TSDF> grid, float max_tsdf_value,
 
         // TODO(jiawen): make a lookup table for this indexing scheme.
         if (all_valid) {
-          positions[0] = Vector3f( x, y, z );
-          positions[1] = Vector3f( x + 1, y, z );
-          positions[2] = Vector3f( x + 1, y, z + 1 );
-          positions[3] = Vector3f( x, y, z + 1 );
-          positions[4] = Vector3f( x, y + 1, z );
-          positions[5] = Vector3f( x + 1, y + 1, z );
-          positions[6] = Vector3f( x + 1, y + 1, z + 1 );
-          positions[7] = Vector3f( x, y + 1, z + 1 );
+          positions[0] = Vector3f(x, y, z);
+          positions[1] = Vector3f(x + 1, y, z);
+          positions[2] = Vector3f(x + 1, y, z + 1);
+          positions[3] = Vector3f(x, y, z + 1);
+          positions[4] = Vector3f(x, y + 1, z);
+          positions[5] = Vector3f(x + 1, y + 1, z);
+          positions[6] = Vector3f(x + 1, y + 1, z + 1);
+          positions[7] = Vector3f(x, y + 1, z + 1);
 
           normals[0] = normals3D[{0, 0, 0}];
           normals[1] = normals3D[{1, 0, 0}];

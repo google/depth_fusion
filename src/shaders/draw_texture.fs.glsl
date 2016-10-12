@@ -15,16 +15,19 @@ R"(
 #version 450
 
 layout(location = 0) uniform sampler2D uSampler;
+// Initialize to identity, scalar constructor is along *diagonal*.
+layout(location = 1) uniform mat4 uColorMatrix = mat4(1.0);
 
 in VertexData
 {
     layout(location = 0) in vec2 vTex;
 };
 
-layout(location = 0) out vec4 color;
+layout(location = 0) out vec4 outputColor;
 
 void main()
 {
-    color = texture(uSampler, vTex);
+    vec4 inputColor = texture(uSampler, vTex);
+    outputColor = uColorMatrix * inputColor;
 }
 )"

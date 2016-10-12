@@ -22,12 +22,11 @@
 
 #include <core/vecmath/Quat4f.h>
 #include <core/time/TimeUtils.h>
-
-#include <CUDA/Event.h>
-#include <CUDA/MathUtils.h>
-#include <CUDA/Rect2i.h>
-#include <CUDA/ThreadMath.cuh>
-#include <CUDA/VecmathConversions.h>
+#include <cuda/Event.h>
+#include <cuda/MathUtils.h>
+#include <cuda/Rect2i.h>
+#include <cuda/ThreadMath.cuh>
+#include <cuda/VecmathConversions.h>
 
 #include "camera_math.cuh"
 

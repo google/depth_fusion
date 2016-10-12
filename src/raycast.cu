@@ -13,46 +13,48 @@
 // limitations under the License.
 #include "raycast.h"
 
-#include <CUDA/Box3f.h>
-#include <CUDA/MathUtils.h>
-#include <CUDA/ThreadMath.cuh>
+#include <cuda/Box3f.h>
+#include <cuda/Event.h>
+#include <cuda/MathUtils.h>
+#include <cuda/ThreadMath.cuh>
 
 #include "camera_math.cuh"
 #include "tsdf.h"
 
 using libcgt::cuda::contains;
+using libcgt::cuda::Event;
 using libcgt::cuda::math::floorToInt;
 using libcgt::cuda::threadmath::threadSubscript2DGlobal;
 
 __inline__ __device__ __host__
 float2 half2()
 {
-    return make_float2( 0.5f );
+    return make_float2(0.5f);
 }
 
 __inline__ __device__ __host__
 float3 half3()
 {
-    return make_float3( 0.5f );
+    return make_float3(0.5f);
 }
 
 __inline__ __device__ __host__
 float2 one2()
 {
-    return make_float2( 1.0f );
+    return make_float2(1.0f);
 }
 
 __inline__ __device__ __host__
 float3 one3()
 {
-    return make_float3( 1.0f );
+    return make_float3(1.0f);
 }
 
-// TODO(jiawen): consider optimizing this by removing all boundary checks and
+// TODO: consider optimizing this by removing all boundary checks and
 // adjusting the kernel.
 
-// TODO(make this a method)
-// TODO(jiawen): easy way to enforce boundary conditions:
+// TODO: make this a method.
+// TODO: easy way to enforce boundary conditions:
 // clamp x to 0.5, width - 0.5,, etc.
 // But that's not useful for SDFs! When you want to know when you're invalid.
 // Assumes the grid_point is valid (coords are within the extents).

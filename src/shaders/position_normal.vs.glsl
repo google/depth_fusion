@@ -14,7 +14,7 @@ R"(
 // limitations under the License.
 #version 450
 
-layout(location = 0) uniform mat4 uCameraFromWorld;
+layout(location = 0) uniform mat4 uClipFromWorld;
 // Initialize to identity, scalar constructor is along *diagonal*.
 layout(location = 1) uniform mat4 uWorldFromObject = mat4(1.0);
 layout(location = 2) uniform mat3 uWorldNormalFromObject = mat3(1.0);
@@ -39,6 +39,6 @@ void main()
   //vWorldNormal = uWorldNormalFromObject * aNormal;
   vWorldNormal = aNormal;
 
-  gl_Position = uCameraFromWorld * vWorldPos;
+  gl_Position = uClipFromWorld * vWorldPos;
 }
 )"

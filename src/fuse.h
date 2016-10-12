@@ -16,9 +16,9 @@
 
 #include <vector_types.h>
 
-#include <CUDA/KernelArray2D.h>
-#include <CUDA/KernelArray3D.h>
-#include <CUDA/float4x4.h>
+#include <cuda/KernelArray2D.h>
+#include <cuda/KernelArray3D.h>
+#include <cuda/float4x4.h>
 
 #include "regular_grid_tsdf.h"
 

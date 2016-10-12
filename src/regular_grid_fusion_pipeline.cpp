@@ -16,15 +16,14 @@
 #include <core/common/ArrayUtils.h>
 #include <core/imageproc/ColorMap.h>
 
-using libcgt::core::arrayutils::cast;
-using libcgt::core::imageproc::linearRemapToLuminance;
-using libcgt::core::imageproc::normalsToRGBA;
+using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::inverse;
 using libcgt::core::vecmath::EuclideanTransform;
+using libcgt::core::vecmath::SimilarityTransform;
 
 RegularGridFusionPipeline::RegularGridFusionPipeline(
   const RGBDCameraParameters& camera_params,
-  const Vector3i& grid_resolution, float voxel_size,
+  const Vector3i& grid_resolution,
   const SimilarityTransform& world_from_grid,
   bool initial_pose_depth,
   const EuclideanTransform& initial_camera_from_world) :
@@ -33,12 +32,12 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   incoming_camera_normals_(camera_params.depth.resolution),
   world_points_(camera_params.depth.resolution),
   world_normals_(camera_params.depth.resolution),
-  icp_debug_vis_(camera_params.depth.resolution),
+  pose_estimation_vis_(camera_params.depth.resolution),
 
   input_buffer_(camera_params.color.resolution,
-    camera_params.depth.resolution),
+                camera_params.depth.resolution),
 
-  regular_grid_(grid_resolution, voxel_size, world_from_grid),
+  regular_grid_(grid_resolution, world_from_grid),
 
   camera_params_(camera_params),
   depth_intrinsics_flpp_{
@@ -56,14 +55,7 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   ),
 
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
-    camera_params.depth.depth_range),
-
-  debug_smoothed_depth_meters_(camera_params.depth.resolution),
-  debug_smoothed_depth_vis_(camera_params.depth.resolution),
-  debug_incoming_camera_normals_(camera_params.depth.resolution),
-  debug_points_world_(camera_params.depth.resolution),
-  debug_normals_world_(camera_params.depth.resolution),
-  debug_icp_debug_vis_(camera_params.depth.resolution)
+       camera_params.depth.depth_range)
 {
 }
 
@@ -74,12 +66,25 @@ void RegularGridFusionPipeline::Reset() {
   regular_grid_.Reset();
 }
 
+Array2DView<const uint8_t> RegularGridFusionPipeline::GetBoardImage() const {
+  return board_image_.readView();
+}
+
+void RegularGridFusionPipeline::SetBoardImage(Array2D<uint8_t> board_image) {
+  board_image_ = board_image;
+}
+
+const RGBDCameraParameters&
+RegularGridFusionPipeline::GetCameraParameters() const {
+  return camera_params_;
+}
+
 PerspectiveCamera RegularGridFusionPipeline::ColorCamera() const {
   PerspectiveCamera camera;
   camera.setFrustumFromIntrinsics(camera_params_.color.intrinsics,
-    camera_params_.color.resolution,
-    camera_params_.color.depth_range.left(),
-    camera_params_.color.depth_range.right());
+                                  camera_params_.color.resolution,
+                                  camera_params_.color.depth_range.left(),
+                                  camera_params_.color.depth_range.right());
 
   if (color_pose_history_estimated_from_depth_.empty()) {
     camera.setCameraFromWorld(GetColorCameraFromWorld(
@@ -94,43 +99,40 @@ PerspectiveCamera RegularGridFusionPipeline::ColorCamera() const {
 PerspectiveCamera RegularGridFusionPipeline::DepthCamera() const {
   PerspectiveCamera camera;
   camera.setFrustumFromIntrinsics(camera_params_.depth.intrinsics,
-    camera_params_.depth.resolution,
-    camera_params_.depth.depth_range.left(),
-    camera_params_.depth.depth_range.right());
+                                  camera_params_.depth.resolution,
+                                  camera_params_.depth.depth_range.left(),
+                                  camera_params_.depth.depth_range.right());
 
   if (depth_pose_history_.empty()) {
     camera.setCameraFromWorld(initial_depth_camera_from_world_);
-  }
-  else {
+  } else {
     camera.setCameraFromWorld(depth_pose_history_.back().camera_from_world);
   }
   return camera;
 }
 
 void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
-  bool depth_updated) {
+                                                   bool depth_updated) {
   if (depth_updated) {
     depth_meters_.copyFromHost(input_buffer_.depth_meters);
 
-    depth_processor_.SmoothDepth(depth_meters_, smoothed_depth_meters_);
+    depth_processor_.Smooth(depth_meters_, smoothed_depth_meters_);
     depth_processor_.EstimateNormals(smoothed_depth_meters_,
-      incoming_camera_normals_);
-
-    // TODO(jiawen): make these queryable by the visualizer
-    smoothed_depth_meters_.copyToHost(debug_smoothed_depth_meters_);
-    incoming_camera_normals_.copyToHost(
-      cast<float4>(debug_incoming_camera_normals_.writeView()));
-
-    // TODO(jiawen): interop
-    linearRemapToLuminance(debug_smoothed_depth_meters_, depth_range_,
-      Range1f::fromMinMax(0.2f, 1.0f), debug_smoothed_depth_vis_);
-    normalsToRGBA(debug_incoming_camera_normals_,
-      debug_incoming_camera_normals_);
+                                     incoming_camera_normals_);
   }
 }
 
 InputBuffer& RegularGridFusionPipeline::GetInputBuffer() {
   return input_buffer_;
+}
+
+Box3f RegularGridFusionPipeline::TSDFGridBoundingBox() const {
+  return regular_grid_.BoundingBox();
+}
+
+const SimilarityTransform&
+RegularGridFusionPipeline::TSDFWorldFromGridTransform() const {
+  return regular_grid_.WorldFromGrid();
 }
 
 bool RegularGridFusionPipeline::UpdatePoseWithICP() {
@@ -151,18 +153,15 @@ bool RegularGridFusionPipeline::UpdatePoseWithICP() {
     return true;
   }
 
-  // TODO(jiawen): make this queryable. have icp_result write itself into a
+  // TODO: Have icp_result write itself into a
   // DeviceArray2D<T>.
   ProjectivePointPlaneICP::Result icp_result =
     icp_.EstimatePose(
       smoothed_depth_meters_, incoming_camera_normals_,
       inverse(depth_pose_history_.back().camera_from_world),
       world_points_, world_normals_,
-      icp_debug_vis_
+      pose_estimation_vis_
     );
-
-  // TODO(jiawen): interop
-  icp_debug_vis_.copyToHost(cast<uchar4>(debug_icp_debug_vis_.writeView()));
 
   if (icp_result.valid) {
     PoseFrame depth_pose_frame;
@@ -199,10 +198,19 @@ void RegularGridFusionPipeline::Raycast() {
     inverse(depth_pose_history_.back().camera_from_world).asMatrix(),
     world_points_, world_normals_
   );
+}
 
-  // TODO(jiawen): and these!
-  world_points_.copyToHost(debug_points_world_.writeView());
-  world_normals_.copyToHost(debug_normals_world_.writeView());
+void RegularGridFusionPipeline::Raycast(const PerspectiveCamera& camera,
+                                        DeviceArray2D<float4>& world_points,
+                                        DeviceArray2D<float4>& world_normals) {
+  Intrinsics intrinsics = camera.intrinsics(world_points.size());
+  Vector4f flpp{intrinsics.focalLength, intrinsics.principalPoint};
+
+  regular_grid_.Raycast(
+    flpp,
+    camera.worldFromCamera().asMatrix(),
+    world_points, world_normals
+  );
 }
 
 TriangleMesh RegularGridFusionPipeline::Triangulate() const {
@@ -210,13 +218,35 @@ TriangleMesh RegularGridFusionPipeline::Triangulate() const {
 }
 
 const std::vector<PoseFrame>&
-  RegularGridFusionPipeline::ColorPoseHistoryEstimatedDepth() const {
+RegularGridFusionPipeline::ColorPoseHistoryEstimatedDepth() const {
   return color_pose_history_estimated_from_depth_;
 }
 
 const std::vector<PoseFrame>&
-  RegularGridFusionPipeline::DepthPoseHistory() const {
+RegularGridFusionPipeline::DepthPoseHistory() const {
   return depth_pose_history_;
+}
+
+const DeviceArray2D<float>&
+RegularGridFusionPipeline::SmoothedDepthMeters() const
+{
+  return smoothed_depth_meters_;
+}
+
+const DeviceArray2D<float4>&
+RegularGridFusionPipeline::SmoothedIncomingNormals() const
+{
+  return incoming_camera_normals_;
+}
+
+const DeviceArray2D<uchar4>&
+RegularGridFusionPipeline::PoseEstimationVisualization() const {
+  return pose_estimation_vis_;
+}
+
+const DeviceArray2D<float4>&
+RegularGridFusionPipeline::RaycastNormals() const {
+  return world_normals_;
 }
 
 EuclideanTransform RegularGridFusionPipeline::GetColorCameraFromWorld(

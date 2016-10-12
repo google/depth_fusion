@@ -18,7 +18,7 @@
 #include <core/vecmath/EuclideanTransform.h>
 #include <core/vecmath/Range1f.h>
 #include <core/vecmath/Vector4f.h>
-#include <CUDA/DeviceArray2D.h>
+#include <cuda/DeviceArray2D.h>
 
 #include "icp_least_squares_data.h"
 

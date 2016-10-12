@@ -17,7 +17,7 @@
 #include <cmath>
 #include <vector_functions.h>
 
-#include <CUDA/float4x4.h>
+#include <cuda/float4x4.h>
 
 // Convert a camera-space point into a pixel coordinate.
 // The camera-space point is right handed with, x-right, y-up, z out of screen.

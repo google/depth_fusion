@@ -17,7 +17,7 @@
 #include <memory>
 
 #include <GL/glew.h>
-#include <QGLWidget>
+#include <QOpenGLWidget>
 
 #include <core/cameras/PerspectiveCamera.h>
 #include <core/common/Array2D.h>
@@ -26,20 +26,24 @@
 #include <qt_interop/FPSControls.h>
 
 #include "gl_state.h"
+#include "static_multi_camera_gl_state.h"
 #include "rgbd_camera_parameters.h"
 
 struct InputBuffer;
 class RegularGridFusionPipeline;
+class StaticMultiCameraPipeline;
 
-class MainWidget : public QGLWidget {
+class MainWidget : public QOpenGLWidget {
  public:
 
   MainWidget(const RGBDCameraParameters& camera_params,
-    const QGLFormat& format,
     QWidget* parent = nullptr);
 
-  void SetGLState(std::unique_ptr<GLState> gl_state);
   void SetPipeline(RegularGridFusionPipeline* pipeline);
+  void SetPipeline(StaticMultiCameraPipeline* pipeline);
+
+  GLState* GetSingleCameraGLState() const;
+  StaticMultiCameraGLState* GetSMCGLState() const;
 
  protected:
   virtual void initializeGL();
@@ -54,15 +58,11 @@ class MainWidget : public QGLWidget {
 
  private:
 
-  void UpdateCameraFrusta();
+  RegularGridFusionPipeline* pipeline_ = nullptr;
+  std::unique_ptr<GLState> gl_state_ = nullptr;
 
-  void DrawWorldAxes();
-  void DrawBoardTexture();
-  void DrawCameraFrustaAndTSDFGrid();
-  void DrawUnprojectedPointCloud();
-
-  RegularGridFusionPipeline* pipeline_;
-  std::unique_ptr<GLState> gl_state_;
+  StaticMultiCameraPipeline* smc_pipeline_ = nullptr;
+  std::unique_ptr<StaticMultiCameraGLState> smc_gl_state_ = nullptr;
 
   FPSControls fps_controls_;
   PerspectiveCamera free_camera_;

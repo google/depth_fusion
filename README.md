@@ -18,14 +18,14 @@ GLSL shaders for the visualization are in **src/shaders**.
 ## Dependencies
 
 * Qt 5.5
-* CUDA 7.5
+* CUDA 7.5 (8.0 on Windows for VS2015/C++11 support).
 * libcgt (see below) and its transitive dependencies.
 * GLEW
 * OpenCV 3.0 
 
 ## Build instructions (CMake)
 0. Get [https://github.com/jiawen/libcgt](https://github.com/jiawen/libcgt "libcgt").
-1. Put libcgt the same level as depth_fusion (they should be siblings). siblings).
+1. Put libcgt the same level as depth_fusion (they should be siblings).
 2. mkdir build
 3. cd build
 4. cmake-gui ..

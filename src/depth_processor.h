@@ -17,7 +17,7 @@
 #include <core/cameras/Intrinsics.h>
 #include <core/vecmath/Range1f.h>
 #include <core/vecmath/Vector4f.h>
-#include <CUDA/DeviceArray2D.h>
+#include <cuda/DeviceArray2D.h>
 
 class DepthProcessor {
  public:
@@ -27,7 +27,14 @@ class DepthProcessor {
   DepthProcessor(const Intrinsics& depth_intrinsics,
     const Range1f& depth_range);
 
-  void SmoothDepth(DeviceArray2D<float>& raw_depth,
+  // TODO: document which direction is up.
+  void Undistort(DeviceArray2D<float>& raw_depth,
+    DeviceArray2D<float2>& undistort_map,
+    DeviceArray2D<float>& undistorted_depth);
+
+  // Smooth raw_depth with a bilateral filter.
+  // TODO: replace hack with an actual bilateral filter.
+  void Smooth(DeviceArray2D<float>& raw_depth,
     DeviceArray2D<float>& smoothed_depth);
 
   void EstimateNormals(DeviceArray2D<float>& smoothed_depth,

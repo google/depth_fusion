@@ -14,9 +14,9 @@
 #include "depth_processor.h"
 
 #include <cuda/Event.h>
-#include <CUDA/MathUtils.h>
-#include <CUDA/Rect2i.h>
-#include <CUDA/ThreadMath.cuh>
+#include <cuda/MathUtils.h>
+#include <cuda/Rect2i.h>
+#include <cuda/ThreadMath.cuh>
 #include <cuda/VecmathConversions.h>
 
 #include "camera_math.cuh"
@@ -71,6 +71,24 @@ void SmoothDepthMapKernel(KernelArray2D<const float> input,
 }
 
 __global__
+void UndistortKernel(cudaTextureObject_t raw_depth,
+  cudaTextureObject_t undistort_map,
+  KernelArray2D<float> undistorted) {
+  int2 xy = threadSubscript2DGlobal();
+  if (contains(Rect2i(undistorted.size()), xy)) {
+    // TODO: make a function to go from xy to [0,1]
+
+    float u = xy.x + 0.5f;
+    float v = xy.y + 0.5f;
+
+    // Fetch from undistort_map[uv] to get xy2.
+    float2 xy2 = tex2D<float2>(undistort_map, u, v);
+
+    undistorted[xy] = tex2D<float>(raw_depth, xy2.x, xy2.y);
+  }
+}
+
+__global__
 void EstimateNormalsKernel(KernelArray2D<const float> depth_map,
   float4 flpp, float2 depth_min_max,
   KernelArray2D<float4> normals) {
@@ -88,7 +106,7 @@ void EstimateNormalsKernel(KernelArray2D<const float> depth_map,
       depth1 >= depth_min_max.x && depth1 <= depth_min_max.y &&
       depth2 >= depth_min_max.x && depth2 <= depth_min_max.y) {
 
-      // TODO(jiawen): can optimize this by not using CameraFromPixel and just
+      // TODO: can optimize this by not using CameraFromPixel and directly
       // scaling x and y by z.
       float3 p0 = CameraFromPixel(xy, depth0, flpp);
       float3 p1 = CameraFromPixel(xy1, depth1, flpp);
@@ -115,13 +133,59 @@ DepthProcessor::DepthProcessor(const Intrinsics& depth_intrinsics,
 
 }
 
-void DepthProcessor::SmoothDepth(DeviceArray2D<float>& raw_depth,
+void DepthProcessor::Undistort(DeviceArray2D<float>& raw_depth,
+  DeviceArray2D<float2>& undistort_map,
+  DeviceArray2D<float>& undistorted_depth) {
+  // Bind raw_depth and undistort_map to texture objects.
+
+  cudaResourceDesc raw_depth_res_desc = raw_depth.resourceDesc();
+  cudaResourceDesc undistort_map_res_desc = undistort_map.resourceDesc();
+
+  cudaTextureDesc point_normalized_tex_desc = {};
+  point_normalized_tex_desc.addressMode[ 0 ] = cudaAddressModeClamp;
+  point_normalized_tex_desc.addressMode[ 1 ] = cudaAddressModeClamp;
+  point_normalized_tex_desc.filterMode = cudaFilterModePoint;
+  point_normalized_tex_desc.readMode = cudaReadModeElementType;
+  point_normalized_tex_desc.normalizedCoords = true;
+
+  cudaTextureDesc point_unnormalized_tex_desc = {};
+  point_unnormalized_tex_desc.addressMode[ 0 ] = cudaAddressModeClamp;
+  point_unnormalized_tex_desc.addressMode[ 1 ] = cudaAddressModeClamp;
+  point_unnormalized_tex_desc.filterMode = cudaFilterModePoint;
+  point_unnormalized_tex_desc.readMode = cudaReadModeElementType;
+  point_unnormalized_tex_desc.normalizedCoords = false;
+
+  cudaError err;
+
+  cudaTextureObject_t raw_depth_tex_obj;
+  err = cudaCreateTextureObject(&raw_depth_tex_obj, &raw_depth_res_desc,
+      &point_normalized_tex_desc, nullptr);
+
+  cudaTextureObject_t undistort_map_tex_obj;
+  err = cudaCreateTextureObject(&undistort_map_tex_obj, &undistort_map_res_desc,
+      &point_unnormalized_tex_desc, nullptr);
+
+  dim3 block(16, 16);
+  dim3 grid = numBins2D(make_int2(raw_depth.size()), block);
+
+  Event e;
+  e.recordStart();
+  UndistortKernel<<<grid, block>>>(
+    raw_depth_tex_obj,
+    undistort_map_tex_obj,
+    undistorted_depth.writeView());
+  float dtMS = e.recordStopSyncAndGetMillisecondsElapsed();
+  printf("DepthProcessor::Undistort took %f ms\n", dtMS);
+}
+
+void DepthProcessor::Smooth(DeviceArray2D<float>& raw_depth,
   DeviceArray2D<float>& smoothed_depth) {
 
   dim3 block(16, 16);
   dim3 grid = numBins2D(make_int2(raw_depth.size()), block);
 
   Event e;
+  e.recordStart();
   SmoothDepthMapKernel<<<grid, block>>>(
     raw_depth.readView(),
     make_float2(depth_range_.leftRight()),
@@ -129,7 +193,7 @@ void DepthProcessor::SmoothDepth(DeviceArray2D<float>& raw_depth,
     delta_z_squared_threshold_,
     smoothed_depth.writeView());
   float dtMS = e.recordStopSyncAndGetMillisecondsElapsed();
-  printf("SmoothDepth took %f ms\n", dtMS);
+  printf("DepthProcessor::Smooth took %f ms\n", dtMS);
 }
 
 void DepthProcessor::EstimateNormals(DeviceArray2D<float>& smoothed_depth,
@@ -144,5 +208,5 @@ void DepthProcessor::EstimateNormals(DeviceArray2D<float>& smoothed_depth,
     make_float2(depth_range_.leftRight()),
     normals.writeView());
   float dtMS = e.recordStopSyncAndGetMillisecondsElapsed();
-  printf("EstimateNormals took %f ms\n", dtMS);
+  printf("DepthProcessor::EstimateNormals took %f ms\n", dtMS);
 }

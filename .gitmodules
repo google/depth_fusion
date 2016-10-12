@@ -1,0 +1,9 @@
+[submodule "third_party/pystring"]
+	path = third_party/pystring
+	url = https://github.com/imageworks/pystring
+[submodule "third_party/gflags"]
+	path = third_party/gflags
+	url = https://github.com/gflags/gflags
+[submodule "third_party/cpp11-range"]
+	path = third_party/cpp11-range
+	url = https://github.com/harrism/cpp11-range

@@ -13,9 +13,9 @@
 // limitations under the License.
 #include "fuse.h"
 
-#include <CUDA/float4x4.h>
-#include <CUDA/MathUtils.h>
-#include <CUDA/ThreadMath.cuh>
+#include <cuda/float4x4.h>
+#include <cuda/MathUtils.h>
+#include <cuda/ThreadMath.cuh>
 
 #include "camera_math.cuh"
 
@@ -23,7 +23,6 @@ using libcgt::cuda::threadmath::threadSubscript2DGlobal;
 using libcgt::cuda::contains;
 using libcgt::cuda::math::roundToInt;
 
-// TODO(jiawen): Tweak Vector4f and Matrix4f.
 // TODO(jiawen): move this into class regular_grid_tsdf.
 __global__
 void FuseKernel(
@@ -42,7 +41,8 @@ void FuseKernel(
     // Find the voxel center.
     // TODO(jiawen): write a helper function that takes in a subscript
     float4 voxel_center_world = make_float4(
-      transformPoint(world_from_grid, make_float3(ij.x + 0.5f, ij.y + 0.5f, k + 0.5f)),
+      transformPoint(
+        world_from_grid, float3{ij.x + 0.5f, ij.y + 0.5f, k + 0.5f}),
       1.0f);
 
     // Project it into camera coordinates.

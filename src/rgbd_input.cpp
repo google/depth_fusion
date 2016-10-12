@@ -37,14 +37,12 @@ RgbdInput::RgbdInput(InputType input_type, const char* filename) {
 
   // Find the rgb stream.
   // TODO: take a dependency on cpp11-range
-  for( int i = 0; i < file_input_stream_->metadata().size(); ++i )
-  {
+  for(int i = 0; i < file_input_stream_->metadata().size(); ++i) {
     const auto& metadata = file_input_stream_->metadata()[ i ];
     if(metadata.type == StreamType::COLOR &&
-      metadata.format ==  PixelFormat::RGB_U888)
-    {
-      rgb_stream_id_ = i;
-      rgb_size_ = metadata.size;
+      metadata.format ==  PixelFormat::RGB_U888) {
+      color_stream_id_ = i;
+      color_metadata_ = metadata;
       break;
     }
   }
@@ -55,21 +53,18 @@ RgbdInput::RgbdInput(InputType input_type, const char* filename) {
     const auto& metadata = file_input_stream_->metadata()[i];
     if (metadata.type == StreamType::DEPTH) {
       raw_depth_stream_id_ = i;
-      raw_depth_mm_.resize(metadata.size);
+      depth_metadata_ = metadata;
       break;
     }
   }
-
-  // TODO(jiawen): loop over looking for a depth stream and get its resolution.
-  //raw_depth_mm_.resize(file_input_stream_->metadata())
 }
 
-Vector2i RgbdInput::rgbSize() const {
-  return rgb_size_;
+Vector2i RgbdInput::colorSize() const {
+  return color_metadata_.size;
 }
 
 Vector2i RgbdInput::depthSize() const {
-  return raw_depth_mm_.size();
+  return depth_metadata_.size;
 }
 
 // TODO(jiawen): simplify: read only rgb, etc
@@ -87,34 +82,38 @@ void RgbdInput::read(InputBuffer* buffer,
 
   uint32_t stream_id;
   int64_t timestamp;
-  int frame_index;
+  int32_t frame_index;
   Array1DView<const uint8_t> src = file_input_stream_->read(
     stream_id, frame_index, timestamp);
 
   // TODO: warn if input buffer is the wrong size.
 
   if (src.notNull()) {
-    if (stream_id == rgb_stream_id_) {
-      Array2DView<const uint8x3> src_rgb(src.pointer(), rgb_size_);
-      RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
-      copy(src_rgb, flipY(buffer->color_rgb.writeView()));
-
+    if (stream_id == color_stream_id_) {
       buffer->color_timestamp = timestamp;
       buffer->color_frame_index = frame_index;
 
-      *rgb_updated = true;
-    } else if (stream_id == raw_depth_stream_id_ ) {
-      Array2DView<const uint16_t> src_depth(
-        src.pointer(), raw_depth_mm_.size());
-      copy(src_depth, raw_depth_mm_.writeView());
-      // TODO: make a set of convert functions for different pixel formats.
-      rawDepthMapToMeters(raw_depth_mm_.readView(), buffer->depth_meters,
-        false);
+      Array2DView<const uint8x3> src_rgb(src.pointer(), color_metadata_.size);
+      RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
+      bool succeeded = copy(src_rgb, flipY(buffer->color_rgb.writeView()));
 
+      *rgb_updated = succeeded;
+    } else if (stream_id == raw_depth_stream_id_ ) {
       buffer->depth_timestamp = timestamp;
       buffer->depth_frame_index = frame_index;
 
-      *depth_updated = true;
+      if (depth_metadata_.format == PixelFormat::DEPTH_MM_U16) {
+        Array2DView<const uint16_t> src_depth(src.pointer(),
+          depth_metadata_.size);
+        rawDepthMapToMeters(src_depth, buffer->depth_meters,
+          false);
+        *depth_updated = true;
+      } else if(depth_metadata_.format == PixelFormat::DEPTH_M_F32) {
+        Array2DView<const float> src_depth(src.pointer(),
+          depth_metadata_.size);
+        bool succeeded = copy(src_depth, buffer->depth_meters.writeView());
+        *depth_updated = succeeded;
+      }
     }
   }
 }

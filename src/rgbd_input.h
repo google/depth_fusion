@@ -38,7 +38,7 @@ public:
   RgbdInput() = default;
   RgbdInput(InputType input_type, const char* filename);
 
-  Vector2i rgbSize() const;
+  Vector2i colorSize() const;
   Vector2i depthSize() const;
 
   void read(InputBuffer* state, bool* rgb_updated, bool* depth_updated);
@@ -46,14 +46,15 @@ public:
 private:
 
   using RGBDInputStream = libcgt::camera_wrappers::RGBDInputStream;
+  using StreamMetadata = libcgt::camera_wrappers::StreamMetadata;
 
   std::unique_ptr<RGBDInputStream> file_input_stream_;
 
-  int rgb_stream_id_ = -1;
-  Vector2i rgb_size_;
+  int color_stream_id_ = -1;
+  StreamMetadata color_metadata_;
 
   int raw_depth_stream_id_ = -1;
-  Array2D<uint16_t> raw_depth_mm_;
+  StreamMetadata depth_metadata_;
 };
 
 #endif  // RGBD_INPUT_H

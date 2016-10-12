@@ -21,8 +21,8 @@
 #include <core/vecmath/SimilarityTransform.h>
 #include <core/vecmath/Vector3i.h>
 #include <core/vecmath/Vector4f.h>
-#include <CUDA/DeviceArray2D.h>
-#include <CUDA/DeviceArray3D.h>
+#include <cuda/DeviceArray2D.h>
+#include <cuda/DeviceArray3D.h>
 
 #include "tsdf.h"
 
@@ -32,10 +32,19 @@ class RegularGridTSDF {
 
 public:
 
-  // "resolution: number of voxels in each direction.
-  // voxel_size: the physical extent of one size of each (cubical) voxel, in meters.
-  RegularGridTSDF(const Vector3i& resolution, float voxel_size,
+  // Same as RegularGridTSDF(resolution, world_from_grid, 4 * VoxelSize()).
+  RegularGridTSDF(const Vector3i& resolution,
     const SimilarityTransform& world_from_grid);
+
+  // resolution: number of voxels in each direction.
+  // world_from_grid: transform mapping grid indices to world coordinates
+  //   world_from_grid.scale is the side length of one (cubical) voxel in world
+  //   units.
+  // max_tsdf_value: the representable range of the TSDF. Set to
+  //   [-max_tsdf_value, max_tsdf_value].
+  RegularGridTSDF(const Vector3i& resolution,
+    const SimilarityTransform& world_from_grid,
+    float max_tsdf_value);
 
   void Reset();
 
@@ -64,10 +73,11 @@ public:
   // The number of samples of the grid along each axis.
   Vector3i Resolution() const;
 
-  // The side length of a (cubical) voxel, in meters.
+  // The side length of one (cubical) voxel, in meters.
   float VoxelSize() const;
 
   // The side lengths of the entire grid, in meters.
+  // Equivalent to VoxelSize() * Resolution().
   Vector3f SideLengths() const;
 
   TriangleMesh Triangulate() const;
@@ -79,11 +89,9 @@ private:
   SimilarityTransform world_from_grid_;
 
   DeviceArray3D<TSDF> device_grid_;
-  float voxel_size_;
 
-  // HACK: 16 mm (4 voxels).
-  // TODO(jiawen): this should be dynamic, and is a function of the noise model.
-  float max_tsdf_val_;
+  // TODO: this should be dynamic, and is a function of the noise model.
+  float max_tsdf_value_;
 };
 
 #endif // REGULAR_GRID_TSDF_H

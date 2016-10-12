@@ -18,6 +18,7 @@
 #include <QString>
 
 #include "regular_grid_fusion_pipeline.h"
+#include "static_multi_camera_pipeline.h"
 
 class ControlWidget;
 class MainWidget;
@@ -32,6 +33,10 @@ class MainController : public QObject {
 
    MainController(RgbdInput* input, RegularGridFusionPipeline* pipeline,
      ControlWidget* control_widget, MainWidget* main_widget);
+
+   // HACK
+   std::vector<RgbdInput> inputs_;
+   StaticMultiCameraPipeline* smc_pipeline_;
 
  public slots:
 

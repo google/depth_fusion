@@ -21,6 +21,8 @@
 #include "main_widget.h"
 #include "rgbd_input.h"
 
+#define USE_SINGLE_MOVING_CAMERA 1
+
 MainController::MainController(
   RgbdInput* input, RegularGridFusionPipeline* pipeline,
   ControlWidget* control_widget, MainWidget* main_widget) :
@@ -41,7 +43,9 @@ MainController::MainController(
     this, &MainController::OnSavePoseClicked);
 }
 
-void MainController::OnReadInput() {
+void MainController::OnReadInput()
+{
+#if USE_SINGLE_MOVING_CAMERA
   bool rgb_updated;
   bool depth_updated;
   input_->read(&(pipeline_->GetInputBuffer()), &rgb_updated, &depth_updated);
@@ -50,7 +54,7 @@ void MainController::OnReadInput() {
 
   bool tracking_succeeded = false;
   if (depth_updated) {
-    // put frameId and timestamps into history and input
+    // TODO: put frameId and timestamps into history and input
 
     tracking_succeeded = pipeline_->UpdatePoseWithICP();
     if (tracking_succeeded) {
@@ -60,12 +64,34 @@ void MainController::OnReadInput() {
   }
 
   if (rgb_updated || depth_updated) {
+    main_widget_->GetSingleCameraGLState()->NotifyTSDFUpdated();
     main_widget_->update();
   }
 
   if (tracking_succeeded) {
-    // main_widget->...notify raycast changed
+    // TODO: main_widget->...notify raycast changed
   }
+#else
+  for (size_t i = 0; i < inputs_.size(); ++i) {
+    bool rgb_updated;
+    bool depth_updated;
+    inputs_[i].read(&(smc_pipeline_->GetInputBuffer(i)),
+      &rgb_updated, &depth_updated);
+    smc_pipeline_->NotifyInputUpdated(i, rgb_updated, depth_updated);
+  }
+
+  //if(depth_updated) {
+  {
+    // TODO: pipeline should emit that TSDF has changed.
+    smc_pipeline_->Fuse();
+    main_widget_->GetSMCGLState()->NotifyTSDFUpdated();
+  }
+
+  //if(rgb_updated || depth_updated) {
+  {
+    main_widget_->update();
+  }
+#endif
 }
 
 void MainController::OnPauseClicked() {
@@ -77,9 +103,17 @@ void MainController::OnPauseClicked() {
 }
 
 void MainController::OnSaveMeshClicked(QString filename) {
+  // HACK:
+#if USE_SINGLE_MOVING_CAMERA
   TriangleMesh mesh = pipeline_->Triangulate();
   bool save_succeeded = mesh.saveOBJ(filename.toStdString().c_str());
-  // TODO(jiawen): messagebox for success
+#else
+  // HACK: rot180
+  Matrix4f rot180 = Matrix4f::rotateX(static_cast<float>(M_PI));
+  TriangleMesh mesh = smc_pipeline_->Triangulate(rot180);
+  bool save_succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+#endif
+// TODO: messagebox for success
 }
 
 void SavePoses(QString filename, const std::vector<PoseFrame> poses) {
