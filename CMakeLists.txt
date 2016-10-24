@@ -45,6 +45,9 @@ include_directories( ../libcgt/build/lib/include/GL/common )
 include_directories( ../libcgt/build/lib/include/GL/GL_45 )
 link_directories( ../libcgt/build/lib/lib )
 
+# artoolkit sample
+add_subdirectory(arsimple)
+
 # third_party
 include_directories( third_party )
 

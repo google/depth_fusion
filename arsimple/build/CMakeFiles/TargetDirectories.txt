@@ -1,0 +1,6 @@
+C:/Users/Lukas/code/smartflash/artoolkit/build/CMakeFiles/arsimple.dir
+C:/Users/Lukas/code/smartflash/artoolkit/build/CMakeFiles/arprojection.dir
+C:/Users/Lukas/code/smartflash/artoolkit/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/Lukas/code/smartflash/artoolkit/build/CMakeFiles/ZERO_CHECK.dir
+C:/Users/Lukas/code/smartflash/artoolkit/build/artoolkit/CMakeFiles/artoolkit.dir
+C:/Users/Lukas/code/smartflash/artoolkit/build/artoolkit/CMakeFiles/ALL_BUILD.dir

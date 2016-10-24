@@ -1,0 +1,23 @@
+# CMake generation dependency list for this directory.
+C:/Users/Lukas/code/smartflash/3rd_party/artoolkit/CMakeLists.txt
+C:/Users/Lukas/code/smartflash/3rd_party/artoolkit/build/CMakeFiles/3.6.1/CMakeSystem.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeSystemSpecificInitialize.cmake
+C:/Users/Lukas/code/smartflash/3rd_party/artoolkit/build/CMakeFiles/3.6.1/CMakeCCompiler.cmake
+C:/Users/Lukas/code/smartflash/3rd_party/artoolkit/build/CMakeFiles/3.6.1/CMakeCXXCompiler.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeSystemSpecificInformation.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeGenericSystem.cmake
+C:/cmake/share/cmake-3.6/Modules/Platform/Windows.cmake
+C:/cmake/share/cmake-3.6/Modules/Platform/WindowsPaths.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeCInformation.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeLanguageInformation.cmake
+C:/cmake/share/cmake-3.6/Modules/Platform/Windows-MSVC-C.cmake
+C:/cmake/share/cmake-3.6/Modules/Platform/Windows-MSVC.cmake
+C:/Users/Lukas/code/smartflash/3rd_party/artoolkit/build/CMakeFiles/3.6.1/CMakeRCCompiler.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeRCInformation.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeCommonLanguageInclude.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeCXXInformation.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeLanguageInformation.cmake
+C:/cmake/share/cmake-3.6/Modules/Compiler/MSVC-CXX.cmake
+C:/cmake/share/cmake-3.6/Modules/Platform/Windows-MSVC-CXX.cmake
+C:/cmake/share/cmake-3.6/Modules/Platform/Windows-MSVC.cmake
+C:/cmake/share/cmake-3.6/Modules/CMakeCommonLanguageInclude.cmake
