@@ -142,15 +142,15 @@ void DepthProcessor::Undistort(DeviceArray2D<float>& raw_depth,
   cudaResourceDesc undistort_map_res_desc = undistort_map.resourceDesc();
 
   cudaTextureDesc point_normalized_tex_desc = {};
-  point_normalized_tex_desc.addressMode[ 0 ] = cudaAddressModeClamp;
-  point_normalized_tex_desc.addressMode[ 1 ] = cudaAddressModeClamp;
+  point_normalized_tex_desc.addressMode[0] = cudaAddressModeClamp;
+  point_normalized_tex_desc.addressMode[1] = cudaAddressModeClamp;
   point_normalized_tex_desc.filterMode = cudaFilterModePoint;
   point_normalized_tex_desc.readMode = cudaReadModeElementType;
   point_normalized_tex_desc.normalizedCoords = true;
 
   cudaTextureDesc point_unnormalized_tex_desc = {};
-  point_unnormalized_tex_desc.addressMode[ 0 ] = cudaAddressModeClamp;
-  point_unnormalized_tex_desc.addressMode[ 1 ] = cudaAddressModeClamp;
+  point_unnormalized_tex_desc.addressMode[0] = cudaAddressModeClamp;
+  point_unnormalized_tex_desc.addressMode[1] = cudaAddressModeClamp;
   point_unnormalized_tex_desc.filterMode = cudaFilterModePoint;
   point_unnormalized_tex_desc.readMode = cudaReadModeElementType;
   point_unnormalized_tex_desc.normalizedCoords = false;
@@ -176,6 +176,10 @@ void DepthProcessor::Undistort(DeviceArray2D<float>& raw_depth,
     undistorted_depth.writeView());
   float dtMS = e.recordStopSyncAndGetMillisecondsElapsed();
   printf("DepthProcessor::Undistort took %f ms\n", dtMS);
+
+  // TODO: don't destroy the texture every time.
+  cudaDestroyTextureObject(undistort_map_tex_obj);
+  cudaDestroyTextureObject(raw_depth_tex_obj);
 }
 
 void DepthProcessor::Smooth(DeviceArray2D<float>& raw_depth,

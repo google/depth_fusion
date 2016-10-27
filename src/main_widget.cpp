@@ -37,17 +37,20 @@ using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::inverse;
 using libcgt::core::geometry::translate;
 
-// TODO: get rid of camera_params.
-MainWidget::MainWidget(const RGBDCameraParameters& camera_params,
-  QWidget* parent) :
-  QOpenGLWidget(parent),
-  camera_params_(camera_params) {
+namespace {
+  void DebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
+    GLsizei length, const GLchar* message, const void* userParam) {
+    fprintf(stderr, "[GL DEBUG]: %s\n", message);
+  }
+}
+
+MainWidget::MainWidget(QWidget* parent) :
+  QOpenGLWidget(parent) {
   QSurfaceFormat format = QSurfaceFormat::defaultFormat();
   format.setProfile(QSurfaceFormat::CoreProfile);
   format.setMajorVersion(4);
   format.setMinorVersion(5);
-//#if _DEBUG
-#if 1
+#if _DEBUG
   format.setOption(QSurfaceFormat::DebugContext, true);
 #endif
   setFormat(format);
@@ -79,6 +82,10 @@ void MainWidget::initializeGL() {
     fprintf(stderr, "Error initializing GLEW: %s\n", glewGetErrorString(err));
     exit(1);
   }
+#if _DEBUG
+  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+  glDebugMessageCallback(DebugCallback, this);
+#endif
   glClearColor(0, 0, 0, 0);
   glEnable(GL_DEPTH_TEST);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

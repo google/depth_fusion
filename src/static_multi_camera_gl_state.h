@@ -45,8 +45,8 @@ class StaticMultiCameraGLState {
 
  private:
 
-   // ----- Helper functions -----
-   void DrawInputsAndIntermediates();
+  // ----- Helper functions -----
+  void DrawInputsAndIntermediates();
   void DrawWorldAxes();
   void DrawCameraFrustaAndTSDFGrid();
   void DrawUnprojectedPointClouds();

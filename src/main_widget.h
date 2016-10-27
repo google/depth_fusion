@@ -27,17 +27,14 @@
 
 #include "gl_state.h"
 #include "static_multi_camera_gl_state.h"
-#include "rgbd_camera_parameters.h"
 
-struct InputBuffer;
 class RegularGridFusionPipeline;
 class StaticMultiCameraPipeline;
 
 class MainWidget : public QOpenGLWidget {
  public:
 
-  MainWidget(const RGBDCameraParameters& camera_params,
-    QWidget* parent = nullptr);
+  MainWidget(QWidget* parent = nullptr);
 
   void SetPipeline(RegularGridFusionPipeline* pipeline);
   void SetPipeline(StaticMultiCameraPipeline* pipeline);
@@ -66,7 +63,6 @@ class MainWidget : public QOpenGLWidget {
 
   FPSControls fps_controls_;
   PerspectiveCamera free_camera_;
-  const RGBDCameraParameters camera_params_;
 };
 
 #endif  // MAIN_WIDGET_H

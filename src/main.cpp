@@ -82,7 +82,7 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
   control_widget.setGeometry(50, 50, 150, 150);
   control_widget.show();
 
-  MainWidget main_widget(camera_params);
+  MainWidget main_widget;
   main_widget.SetPipeline(&pipeline);
 
   const int window_width = 1920;
@@ -236,7 +236,7 @@ int StaticMultiCameraMain(int argc, char* argv[]) {
   control_widget.setGeometry(50, 50, 150, 150);
   control_widget.show();
 
-  MainWidget main_widget(camera_params[0]);
+  MainWidget main_widget;
   main_widget.SetPipeline(&pipeline);
 
   const int window_width = 1920;
@@ -273,7 +273,7 @@ int StaticMultiCameraMain(int argc, char* argv[]) {
     bool rgb_updated;
     bool depth_updated;
     for(size_t i = 0; i < inputs.size(); ++i) {
-      printf("Processing frame %d of %d\n", i, inputs.size());
+      printf("Processing frame %zu of %zu\n", i, inputs.size());
       pipeline.Reset();
 
       inputs[i].read(&pipeline.GetInputBuffer(i),

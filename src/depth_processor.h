@@ -28,6 +28,9 @@ class DepthProcessor {
     const Range1f& depth_range);
 
   // TODO: document which direction is up.
+  // Correct lens distortion in raw_depth using undistort_map.
+  // TODO: switch interface to use textures as inputs.
+  // TODO: switch interface to use surfaces as outputs.
   void Undistort(DeviceArray2D<float>& raw_depth,
     DeviceArray2D<float2>& undistort_map,
     DeviceArray2D<float>& undistorted_depth);
