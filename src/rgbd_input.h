@@ -14,9 +14,13 @@
 #ifndef RGBD_INPUT_H
 #define RGBD_INPUT_H
 
+#include <cstdint>
 #include <memory>
 
+#include <core/common/Array2D.h>
+#include <core/common/BasicTypes.h>
 #include <camera_wrappers/RGBDStream.h>
+#include <camera_wrappers/OpenNI2/OpenNI2Camera.h>
 
 // TODO(jiawen): Figure out a way to forward declare RGBDInputStream.
 
@@ -41,12 +45,26 @@ public:
   Vector2i colorSize() const;
   Vector2i depthSize() const;
 
-  void read(InputBuffer* state, bool* rgb_updated, bool* depth_updated);
+  // Read one frame. If rgb_updated is set to true, then buffer->color_rgb
+  // will be updated. Likewise, if depth_updated is set to true, then
+  // buffer->depth_meters will be updated. Both might be set to false, in which
+  // case the read failed.
+  //
+  // TODO: return a status struct, indicating if end of file is reached.
+  void read(InputBuffer* buffer, bool* rgb_updated, bool* depth_updated);
 
 private:
 
+  using OpenNI2Camera = libcgt::camera_wrappers::openni2::OpenNI2Camera;
   using RGBDInputStream = libcgt::camera_wrappers::RGBDInputStream;
   using StreamMetadata = libcgt::camera_wrappers::StreamMetadata;
+
+  InputType input_type_;
+
+  std::unique_ptr<OpenNI2Camera> openni2_camera_;
+  Array2D<uint8x3> openni2_buffer_rgb_;
+  Array2D<uint16_t> openni2_buffer_depth_;
+  OpenNI2Camera::Frame openni2_frame_;
 
   std::unique_ptr<RGBDInputStream> file_input_stream_;
 

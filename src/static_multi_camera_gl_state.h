@@ -16,6 +16,10 @@
 
 #include <unordered_map>
 
+#include <GL/glew.h>
+#include <QObject>
+#include <QOpenGLWidget>
+
 #include <core/common/Array2D.h>
 
 #include <cuda/DeviceArray2D.h>
@@ -33,9 +37,13 @@
 
 class StaticMultiCameraPipeline;
 
-class StaticMultiCameraGLState {
+class StaticMultiCameraGLState : public QObject {
+
+ Q_OBJECT
+
  public:
-  StaticMultiCameraGLState(StaticMultiCameraPipeline* pipeline);
+  StaticMultiCameraGLState(StaticMultiCameraPipeline* pipeline,
+    QOpenGLWidget* parent);
 
   //void NotifyInputUpdated();
   void NotifyTSDFUpdated();
@@ -53,6 +61,7 @@ class StaticMultiCameraGLState {
   void DrawFullscreenRaycast();
 
   // ----- State -----
+  QOpenGLWidget* parent_ = nullptr;
   StaticMultiCameraPipeline* pipeline_ = nullptr;
   bool tsdf_is_dirty_ = true;
   PerspectiveCamera free_camera_;

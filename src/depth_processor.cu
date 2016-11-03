@@ -206,6 +206,7 @@ void DepthProcessor::EstimateNormals(DeviceArray2D<float>& smoothed_depth,
   dim3 grid = numBins2D(make_int2(smoothed_depth.size()), block);
 
   Event e;
+  e.recordStart();
   EstimateNormalsKernel<<<grid, block>>>(
     smoothed_depth.readView(),
     make_float4(depth_intrinsics_flpp_),

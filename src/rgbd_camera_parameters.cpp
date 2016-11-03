@@ -89,3 +89,13 @@ RGBDCameraParameters LoadRGBDCameraParameters(const std::string& dir) {
 
 	return params;
 }
+
+EuclideanTransform RGBDCameraParameters::ConvertToColorCameraFromWorld(
+    const EuclideanTransform& depth_camera_from_world) const {
+  return color_from_depth * depth_camera_from_world;
+}
+
+EuclideanTransform RGBDCameraParameters::ConvertToDepthCameraFromWorld(
+    const EuclideanTransform& color_camera_from_world) const {
+  return depth_from_color * color_camera_from_world;
+}

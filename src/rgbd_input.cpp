@@ -31,30 +31,50 @@ using libcgt::core::arrayutils::flipY;
 using libcgt::core::imageproc::linearRemapToLuminance;
 using libcgt::core::imageproc::RGBToBGR;
 
-RgbdInput::RgbdInput(InputType input_type, const char* filename) {
-  // TODO(jiawen): if type is ...
-  file_input_stream_ = std::make_unique<RGBDInputStream>(filename);
+RgbdInput::RgbdInput(InputType input_type, const char* filename) :
+  input_type_(input_type) {
+  if (input_type == InputType::OPENNI2) {
+    std::vector<libcgt::camera_wrappers::StreamConfig> config;
+    config.emplace_back(
+      StreamType::COLOR,
+      Vector2i{ 640, 480 }, PixelFormat::RGB_U888, 30,
+      false
+    );
+    config.emplace_back(
+      StreamType::DEPTH,
+      Vector2i{ 640, 480 }, PixelFormat::DEPTH_MM_U16, 30,
+      false
+    );
+    openni2_camera_ = std::make_unique<OpenNI2Camera>(config);
+    openni2_buffer_rgb_.resize(openni2_camera_->colorConfig().resolution);
+    openni2_buffer_depth_.resize(openni2_camera_->depthConfig().resolution);
+    openni2_frame_.rgb = openni2_buffer_rgb_.writeView();
+    openni2_frame_.depth = openni2_buffer_depth_.writeView();
+    openni2_camera_->start();
+  } else if (input_type == InputType::FILE) {
+    file_input_stream_ = std::make_unique<RGBDInputStream>(filename);
 
-  // Find the rgb stream.
-  // TODO: take a dependency on cpp11-range
-  for(int i = 0; i < file_input_stream_->metadata().size(); ++i) {
-    const auto& metadata = file_input_stream_->metadata()[ i ];
-    if(metadata.type == StreamType::COLOR &&
-      metadata.format ==  PixelFormat::RGB_U888) {
-      color_stream_id_ = i;
-      color_metadata_ = metadata;
-      break;
+    // Find the rgb stream.
+    // TODO: take a dependency on cpp11-range
+    for(int i = 0; i < file_input_stream_->metadata().size(); ++i) {
+      const auto& metadata = file_input_stream_->metadata()[ i ];
+      if(metadata.type == StreamType::COLOR &&
+        metadata.format ==  PixelFormat::RGB_U888) {
+        color_stream_id_ = i;
+        color_metadata_ = metadata;
+        break;
+      }
     }
-  }
 
-  // Find the depth stream.
-  // TODO: take a dependency on cpp11-range
-  for (int i = 0; i < file_input_stream_->metadata().size(); ++i) {
-    const auto& metadata = file_input_stream_->metadata()[i];
-    if (metadata.type == StreamType::DEPTH) {
-      raw_depth_stream_id_ = i;
-      depth_metadata_ = metadata;
-      break;
+    // Find the depth stream.
+    // TODO: take a dependency on cpp11-range
+    for (int i = 0; i < file_input_stream_->metadata().size(); ++i) {
+      const auto& metadata = file_input_stream_->metadata()[i];
+      if (metadata.type == StreamType::DEPTH) {
+        raw_depth_stream_id_ = i;
+        depth_metadata_ = metadata;
+        break;
+      }
     }
   }
 }
@@ -67,165 +87,76 @@ Vector2i RgbdInput::depthSize() const {
   return depth_metadata_.size;
 }
 
-// TODO(jiawen): simplify: read only rgb, etc
-
-// TODO(jiawen): need to pass in serialized RGBDParameters
-//  or if it's a real camera, then it's easy
+// TODO: simplify: read only rgb, etc
+// TODO: by default, read all
 
 void RgbdInput::read(InputBuffer* buffer,
   bool* rgb_updated, bool* depth_updated) {
   assert(rgb_updated != nullptr);
   assert(depth_updated != nullptr);
 
+  // TODO: warn if input buffer is the wrong size. Resize it?
+
   *rgb_updated = false;
   *depth_updated = false;
 
-  uint32_t stream_id;
-  int64_t timestamp;
-  int32_t frame_index;
-  Array1DView<const uint8_t> src = file_input_stream_->read(
-    stream_id, frame_index, timestamp);
+  if (input_type_ == InputType::OPENNI2) {
+    // TODO: if closed, return false
 
-  // TODO: warn if input buffer is the wrong size.
+    bool succeeded = openni2_camera_->pollAll(openni2_frame_);
+    if (openni2_frame_.colorUpdated) {
+      // Copy the buffer, flipping it upside down for OpenGL.
+      copy<uint8x3>(openni2_frame_.rgb, flipY(buffer->color_rgb.writeView()));
+      // Convert RGB to BGR for OpenCV.
+      RGBToBGR(openni2_frame_.rgb, buffer->color_bgr_ydown.writeView());
+      buffer->color_timestamp_ns = openni2_frame_.colorTimestamp;
+      buffer->color_frame_index = openni2_frame_.colorFrameNumber;
+      *rgb_updated = openni2_frame_.colorUpdated;
+    }
 
-  if (src.notNull()) {
-    if (stream_id == color_stream_id_) {
-      buffer->color_timestamp = timestamp;
-      buffer->color_frame_index = frame_index;
+    if (openni2_frame_.depthUpdated) {
+      rawDepthMapToMeters(openni2_frame_.depth, buffer->depth_meters,
+        false, true);
+      buffer->depth_timestamp_ns = openni2_frame_.depthTimestamp;
+      buffer->depth_frame_index = openni2_frame_.depthFrameNumber;
+      *depth_updated = openni2_frame_.depthUpdated;
+    }
 
-      Array2DView<const uint8x3> src_rgb(src.pointer(), color_metadata_.size);
-      RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
-      bool succeeded = copy(src_rgb, flipY(buffer->color_rgb.writeView()));
+  } else if(input_type_ == InputType::FILE) {
+    uint32_t stream_id;
+    int64_t timestamp_ns;
+    int32_t frame_index;
+    Array1DView<const uint8_t> src = file_input_stream_->read(
+      stream_id, frame_index, timestamp_ns);
 
-      *rgb_updated = succeeded;
-    } else if (stream_id == raw_depth_stream_id_ ) {
-      buffer->depth_timestamp = timestamp;
-      buffer->depth_frame_index = frame_index;
+    if (src.notNull()) {
+      if (stream_id == color_stream_id_) {
+        buffer->color_timestamp_ns = timestamp_ns;
+        buffer->color_frame_index = frame_index;
 
-      if (depth_metadata_.format == PixelFormat::DEPTH_MM_U16) {
-        Array2DView<const uint16_t> src_depth(src.pointer(),
-          depth_metadata_.size);
-        rawDepthMapToMeters(src_depth, buffer->depth_meters,
-          false);
-        *depth_updated = true;
-      } else if(depth_metadata_.format == PixelFormat::DEPTH_M_F32) {
-        Array2DView<const float> src_depth(src.pointer(),
-          depth_metadata_.size);
-        bool succeeded = copy(src_depth, buffer->depth_meters.writeView());
-        *depth_updated = succeeded;
+        Array2DView<const uint8x3> src_rgb(
+          src.pointer(), color_metadata_.size);
+        RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
+        bool succeeded = copy(src_rgb, flipY(buffer->color_rgb.writeView()));
+
+        *rgb_updated = succeeded;
+      } else if (stream_id == raw_depth_stream_id_ ) {
+        buffer->depth_timestamp_ns = timestamp_ns;
+        buffer->depth_frame_index = frame_index;
+
+        if (depth_metadata_.format == PixelFormat::DEPTH_MM_U16) {
+          Array2DView<const uint16_t> src_depth(src.pointer(),
+            depth_metadata_.size);
+          rawDepthMapToMeters(src_depth, buffer->depth_meters,
+            false);
+          *depth_updated = true;
+        } else if(depth_metadata_.format == PixelFormat::DEPTH_M_F32) {
+          Array2DView<const float> src_depth(src.pointer(),
+            depth_metadata_.size);
+          bool succeeded = copy(src_depth, buffer->depth_meters.writeView());
+          *depth_updated = succeeded;
+        }
       }
     }
   }
 }
-
-#if 0
-// TODO(jiawen): this is the code for reading the cameras.
-// This needs to be cleaned up and supported.
-QTimer timer;
-timer.setInterval(33);
-timer.start();
-
-QObject::connect(&timer, &QTimer::timeout,
-  [&]() {
-#if USE_KINECT1X
-  camera.pollAll(frame);
-  // Kinect data is mirrored and BGRA.
-  // TODO(jiawen): provide a mirroring option and set it to true
-  BGRAToBGR(
-    flipX(frame.bgra),
-    buffer.raw_color);
-  copy<uint16_t>(input_depth_frame,
-    flipX(buffer.raw_depth_mm.writeView()));
-#endif
-
-#if USE_OPENNI2
-
-
-#if 1
-  printf("polling...");
-  camera.pollAll(frame, kWaitMillis);
-  printf("frame.colorUpdated = %d, frame.depthUpdated = %d\n",
-    frame.colorUpdated, frame.depthUpdated);
-  if (frame.colorUpdated) {
-    RGBToBGR(frame.rgb, buffer.raw_color.writeView());
-  }
-  if (frame.depthUpdated) {
-    copy(input_depth_frame.readView(), buffer.raw_depth_mm.writeView());
-  }
-#else
-  frame.colorUpdated = false;
-  frame.depthUpdated = false;
-  uint32_t streamId;
-  int frameId;
-  int64_t timestamp;
-  Array1DView<const uint8_t> data =
-    input_stream.read(streamId, frameId, timestamp);
-  //if ((data.isNull() || frameId > 10) && !saved) {
-  if (data.isNull() && !saved) {
-    saved = true;
-
-    TriangleMesh mesh = pipeline.Triangulate();
-    mesh.saveOBJ("c:/tmp/foo.obj");
-    exit(0);
-  }
-  if (streamId == 0) {
-    Array2DView<const uint8x3> color_frame(data.pointer(), { 640, 480 });
-    RGBToBGR(color_frame, buffer.raw_color);
-    frame.colorUpdated = true;
-  }
-  if (streamId == 1) {
-    Array2DView<const uint16_t> depth_frame(data.pointer(), { 640, 480 });
-    copy(depth_frame, buffer.raw_depth_mm.writeView());
-    frame.depthUpdated = true;
-  }
-#endif
-#endif
-
-  // Process color.
-  if (frame.colorUpdated) {
-    // Flip color upside down.
-    copy<uint8x3>(buffer.raw_color, flipY(buffer.color.writeView()));
-    copy<uint8x3>(color_vis_view, flipY(buffer.color_vis.writeView()));
-  }
-
-  // Process depth.
-  if (frame.depthUpdated) {
-    libcgt::camera_wrappers::kinect1x::rawDepthMapToMeters(
-      buffer.raw_depth_mm, buffer.depth_meters, false);
-
-    linearRemapToLuminance(
-      buffer.depth_meters, camera_params.depth_range,
-      Range1f::fromMinMax(0.2f, 1.0f), buffer.depth_vis);
-  }
-
-  if (frame.depthUpdated) {
-#if 0
-    if (kDoColorTracking && pose.valid) {
-      pipeline.UpdateDepthImage(buffer->depth_meters);
-      pipeline.UpdatePoseUsingColorCamera(pose.camera_from_board);
-      pipeline.Fuse();
-
-      pipeline.Raycast();
-    }
-    else {
-#endif
-        {
-          pipeline.UpdateDepthImage(buffer.depth_meters);
-          bool icpSucceeded = pipeline.UpdatePoseWithICP();
-          printf("ICP succeeded = %d\n", icpSucceeded);
-          if (icpSucceeded) {
-            pipeline.Fuse();
-
-            pipeline.Raycast();
-          }
-        }
-    }
-
-#if 1
-    if (frame.colorUpdated || frame.depthUpdated) {
-      main_widget.update();
-    }
-#endif
-  }
-  );
-#endif

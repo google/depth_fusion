@@ -29,6 +29,8 @@ struct CameraParameters {
   Intrinsics intrinsics; // y axis points up.
   std::vector<float> dist_coeffs;
   Array2D<Vector2f> undistortion_map; // y axis points up.
+
+  // TODO: move this into depth parameters only
   Range1f depth_range; // In meters.
 };
 
@@ -43,6 +45,18 @@ struct RGBDCameraParameters {
   EuclideanTransform color_from_depth;  // In meters.
 
   // TODO: Add a noise model.
+
+  // Using the known extrinsic calibration between the color and depth
+  // cameras, convert a depth camera_from_world pose to a color
+  // camera_from_world pose.
+  EuclideanTransform ConvertToColorCameraFromWorld(
+    const EuclideanTransform& depth_camera_from_world) const;
+
+  // Using the known extrinsic calibration between the color and depth
+  // cameras, convert a color camera_from_world pose to a depth
+  // camera_from_world pose.
+  EuclideanTransform ConvertToDepthCameraFromWorld(
+    const EuclideanTransform& color_camera_from_world) const;
 };
 
 // Load a CameraParameters object from an already-opened OpenCV FileStorage

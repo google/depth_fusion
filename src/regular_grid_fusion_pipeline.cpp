@@ -13,6 +13,8 @@
 // limitations under the License.
 #include "regular_grid_fusion_pipeline.h"
 
+#include <cassert>
+
 #include <core/common/ArrayUtils.h>
 #include <core/imageproc/ColorMap.h>
 
@@ -25,8 +27,7 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   const RGBDCameraParameters& camera_params,
   const Vector3i& grid_resolution,
   const SimilarityTransform& world_from_grid,
-  bool initial_pose_depth,
-  const EuclideanTransform& initial_camera_from_world) :
+  const PoseFrame& initial_pose) :
   depth_meters_(camera_params.depth.resolution),
   smoothed_depth_meters_(camera_params.depth.resolution),
   incoming_camera_normals_(camera_params.depth.resolution),
@@ -49,29 +50,22 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   depth_processor_(camera_params.depth.intrinsics,
     camera_params.depth.depth_range),
 
-  initial_depth_camera_from_world_(initial_pose_depth ?
-    initial_camera_from_world :
-    camera_params.depth_from_color * initial_camera_from_world
-  ),
+  initial_pose_(initial_pose),
 
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
-       camera_params.depth.depth_range)
+       camera_params.depth.depth_range),
+
+  // TODO: pass in a PoseEstimator object.
+  color_pose_estimator_(camera_params.color, "../res/cube_64mm.dat")
 {
+  assert(initial_pose.method == PoseFrame::EstimationMethod::FIXED_INITIAL);
 }
 
 void RegularGridFusionPipeline::Reset() {
   num_successive_failures_ = 0;
-  depth_pose_history_.clear();
-  color_pose_history_estimated_from_depth_.clear();
+  last_raycast_pose_ = {};
+  pose_history_.clear();
   regular_grid_.Reset();
-}
-
-Array2DView<const uint8_t> RegularGridFusionPipeline::GetBoardImage() const {
-  return board_image_.readView();
-}
-
-void RegularGridFusionPipeline::SetBoardImage(Array2D<uint8_t> board_image) {
-  board_image_ = board_image;
 }
 
 const RGBDCameraParameters&
@@ -85,14 +79,10 @@ PerspectiveCamera RegularGridFusionPipeline::ColorCamera() const {
                                   camera_params_.color.resolution,
                                   camera_params_.color.depth_range.left(),
                                   camera_params_.color.depth_range.right());
+  const PoseFrame& pose = pose_history_.empty() ?
+    initial_pose_ : pose_history_.back();
+  camera.setCameraFromWorld(pose.color_camera_from_world);
 
-  if (color_pose_history_estimated_from_depth_.empty()) {
-    camera.setCameraFromWorld(GetColorCameraFromWorld(
-      initial_depth_camera_from_world_));
-  } else {
-    camera.setCameraFromWorld(GetColorCameraFromWorld(
-      depth_pose_history_.back().camera_from_world));
-  }
   return camera;
 }
 
@@ -102,23 +92,52 @@ PerspectiveCamera RegularGridFusionPipeline::DepthCamera() const {
                                   camera_params_.depth.resolution,
                                   camera_params_.depth.depth_range.left(),
                                   camera_params_.depth.depth_range.right());
+  const PoseFrame& pose = pose_history_.empty() ?
+    initial_pose_ : pose_history_.back();
+  camera.setCameraFromWorld(pose.depth_camera_from_world);
 
-  if (depth_pose_history_.empty()) {
-    camera.setCameraFromWorld(initial_depth_camera_from_world_);
-  } else {
-    camera.setCameraFromWorld(depth_pose_history_.back().camera_from_world);
-  }
   return camera;
 }
 
 void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
                                                    bool depth_updated) {
+  PipelineDataType data_changed = PipelineDataType::NONE;
+
+  bool pose_updated = false;
+  if (color_updated) {
+    // TODO: check if timestamps are close?
+    // int64_t color_timestamp_ns = input_buffer_.color_timestamp_ns;
+    bool color_pose_updated = UpdatePoseWithColorCamera();
+    pose_updated |= color_pose_updated;
+    data_changed |= PipelineDataType::INPUT_COLOR;
+  }
   if (depth_updated) {
     depth_meters_.copyFromHost(input_buffer_.depth_meters);
-
     depth_processor_.Smooth(depth_meters_, smoothed_depth_meters_);
     depth_processor_.EstimateNormals(smoothed_depth_meters_,
                                      incoming_camera_normals_);
+    data_changed |= PipelineDataType::INPUT_DEPTH;
+    data_changed |= PipelineDataType::SMOOTHED_DEPTH;
+
+    bool depth_pose_updated = UpdatePoseWithICP();
+    pose_updated |= depth_pose_updated;
+
+    if (pose_updated) {
+#if 1
+      // TODO: if do_fusion...
+      Fuse();
+      Raycast();
+      data_changed |= PipelineDataType::TSDF;
+      data_changed |= PipelineDataType::RAYCAST_NORMALS;
+#endif
+    }
+  }
+
+  if (pose_updated) {
+    data_changed |= PipelineDataType::CAMERA_POSE;
+  }
+  if (data_changed != PipelineDataType::NONE) {
+    emit dataChanged(data_changed);
   }
 }
 
@@ -136,21 +155,24 @@ RegularGridFusionPipeline::TSDFWorldFromGridTransform() const {
 }
 
 bool RegularGridFusionPipeline::UpdatePoseWithICP() {
-  // On the first frame, initialize history with default.
-  if (depth_pose_history_.empty()) {
-    PoseFrame depth_pose_frame;
-    depth_pose_frame.timestamp = input_buffer_.depth_timestamp;
-    depth_pose_frame.frame_index = input_buffer_.depth_frame_index;
-    depth_pose_frame.camera_from_world = initial_depth_camera_from_world_;
-
-    depth_pose_history_.push_back(depth_pose_frame);
-
-    PoseFrame color_pose_frame = depth_pose_frame;
-    color_pose_frame.camera_from_world = GetColorCameraFromWorld(
-      depth_pose_frame.camera_from_world);
-    color_pose_history_estimated_from_depth_.push_back(color_pose_frame);
-
+  // ICP can only estimate relative pose, not absolute (it needs a previous
+  // raycast). To get started, if there wasn't a frame estimated using the
+  // color camera, initialize pose history with user-specified default.
+  if (pose_history_.empty()) {
+    pose_history_.push_back(initial_pose_);
     return true;
+  }
+
+  // TODO: this is a lot of combinations, might be easier to simplify this
+  // logic by limiting the number of configurations.
+  // RGBD mode: don't start until we saw a fiducial first
+  // RGB tracking only mode: easy
+  // Depth tracking only mode: easy
+
+  // If we have never raycast before but have a pose (say, from color
+  // tracking), then make sure to do a raycast first.
+  if (last_raycast_pose_.method == PoseFrame::EstimationMethod::NONE) {
+    Raycast();
   }
 
   // TODO: Have icp_result write itself into a
@@ -158,22 +180,22 @@ bool RegularGridFusionPipeline::UpdatePoseWithICP() {
   ProjectivePointPlaneICP::Result icp_result =
     icp_.EstimatePose(
       smoothed_depth_meters_, incoming_camera_normals_,
-      inverse(depth_pose_history_.back().camera_from_world),
+      inverse(last_raycast_pose_.depth_camera_from_world),
       world_points_, world_normals_,
       pose_estimation_vis_
     );
 
   if (icp_result.valid) {
-    PoseFrame depth_pose_frame;
-    depth_pose_frame.timestamp = input_buffer_.depth_timestamp;
-    depth_pose_frame.frame_index = input_buffer_.depth_frame_index;
-    depth_pose_frame.camera_from_world = inverse(icp_result.world_from_camera);
-    depth_pose_history_.push_back(depth_pose_frame);
+    PoseFrame pose_frame;
+    pose_frame.method = PoseFrame::EstimationMethod::DEPTH_ICP;
+    pose_frame.timestamp_ns = input_buffer_.depth_timestamp_ns;
+    pose_frame.frame_index = input_buffer_.depth_frame_index;
+    pose_frame.depth_camera_from_world = inverse(icp_result.world_from_camera);
+    pose_frame.color_camera_from_world =
+      camera_params_.ConvertToColorCameraFromWorld(
+        pose_frame.depth_camera_from_world);
 
-    PoseFrame color_pose_frame = depth_pose_frame;
-    color_pose_frame.camera_from_world = GetColorCameraFromWorld(
-      depth_pose_frame.camera_from_world);
-    color_pose_history_estimated_from_depth_.push_back(color_pose_frame);
+    pose_history_.push_back(pose_frame);
   } else {
     ++num_successive_failures_;
     if (num_successive_failures_ > kMaxSuccessiveFailuresBeforeReset) {
@@ -183,19 +205,39 @@ bool RegularGridFusionPipeline::UpdatePoseWithICP() {
   return icp_result.valid;
 }
 
+bool RegularGridFusionPipeline::UpdatePoseWithColorCamera() {
+  ARToolkitPoseEstimator::Result result =
+    color_pose_estimator_.EstimatePose(input_buffer_.color_bgr_ydown);
+  if (result.valid) {
+    PoseFrame pose_frame;
+    pose_frame.method = PoseFrame::EstimationMethod::COLOR_ARTOOLKIT;
+    pose_frame.frame_index = input_buffer_.color_frame_index;
+    pose_frame.timestamp_ns = input_buffer_.color_timestamp_ns;
+    pose_frame.color_camera_from_world = inverse(result.world_from_camera);
+    pose_frame.depth_camera_from_world =
+      camera_params_.ConvertToDepthCameraFromWorld(
+        pose_frame.color_camera_from_world);
+
+    pose_history_.push_back(pose_frame);
+  }
+
+  return result.valid;
+}
+
 // TODO: use distortion model.
 void RegularGridFusionPipeline::Fuse() {
   regular_grid_.Fuse(
     depth_intrinsics_flpp_, camera_params_.depth.depth_range,
-    depth_pose_history_.back().camera_from_world.asMatrix(),
+    pose_history_.back().depth_camera_from_world.asMatrix(),
     depth_meters_
   );
 }
 
 void RegularGridFusionPipeline::Raycast() {
+  last_raycast_pose_ = pose_history_.back();
   regular_grid_.Raycast(
     depth_intrinsics_flpp_,
-    inverse(depth_pose_history_.back().camera_from_world).asMatrix(),
+    inverse(last_raycast_pose_.depth_camera_from_world).asMatrix(),
     world_points_, world_normals_
   );
 }
@@ -218,13 +260,8 @@ TriangleMesh RegularGridFusionPipeline::Triangulate() const {
 }
 
 const std::vector<PoseFrame>&
-RegularGridFusionPipeline::ColorPoseHistoryEstimatedDepth() const {
-  return color_pose_history_estimated_from_depth_;
-}
-
-const std::vector<PoseFrame>&
-RegularGridFusionPipeline::DepthPoseHistory() const {
-  return depth_pose_history_;
+RegularGridFusionPipeline::PoseHistory() const {
+  return pose_history_;
 }
 
 const DeviceArray2D<float>&
@@ -247,9 +284,4 @@ RegularGridFusionPipeline::PoseEstimationVisualization() const {
 const DeviceArray2D<float4>&
 RegularGridFusionPipeline::RaycastNormals() const {
   return world_normals_;
-}
-
-EuclideanTransform RegularGridFusionPipeline::GetColorCameraFromWorld(
-  const EuclideanTransform& depth_camera_from_world) const {
-  return camera_params_.color_from_depth * depth_camera_from_world;
 }

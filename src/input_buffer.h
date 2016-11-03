@@ -28,9 +28,9 @@ struct InputBuffer {
 
   // Incoming metadata.
   int color_frame_index = 0;
-  int64_t color_timestamp = 0LL;
+  int64_t color_timestamp_ns = 0LL;
   int depth_frame_index = 0;
-  int64_t depth_timestamp = 0LL;
+  int64_t depth_timestamp_ns = 0LL;
 
   // This buffer is y-down for OpenCV only.
   Array2D<uint8x3> color_bgr_ydown;

@@ -11,35 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef POSE_FRAME_H
-#define POSE_FRAME_H
+#ifndef PIPELINE_DATA_TYPE_H
+#define PIPELINE_DATA_TYPE_H
 
-#include <cstdint>
+#include <bitmask_operators.hpp>
 
-#include <core/vecmath/EuclideanTransform.h>
-
-struct PoseFrame {
-
-  enum class EstimationMethod : uint32_t {
-    NONE = 0,
-
-    FIXED_INITIAL = 1,
-
-    COLOR_ARTOOLKIT = 16,
-    COLOR_ARUCO = 17,
-
-    DEPTH_ICP = 128
-  };
-
-  using EuclideanTransform = libcgt::core::vecmath::EuclideanTransform;
-
-  EstimationMethod method = EstimationMethod::NONE;
-
-  int32_t frame_index = 0;
-  int64_t timestamp_ns = 0;
-
-  EuclideanTransform color_camera_from_world;
-  EuclideanTransform depth_camera_from_world;
+enum class PipelineDataType {
+  NONE = 0,
+  INPUT_COLOR = 1,
+  INPUT_DEPTH = 2,
+  SMOOTHED_DEPTH = 4,
+  CAMERA_POSE = 8,
+  TSDF = 16,
+  RAYCAST_NORMALS = 32
 };
 
-#endif  // POSE_FRAME_H
+template<>
+struct enable_bitmask_operators<PipelineDataType> {
+  static const bool enable = true;
+};
+
+#endif  // PIPELINE_DATA_TYPE_H

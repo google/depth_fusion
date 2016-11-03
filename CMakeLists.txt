@@ -1,6 +1,9 @@
 cmake_minimum_required( VERSION 3.4 )
 project( depth_fusion )
 
+set_property( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+	PROPERTY VS_STARTUP_PROJECT depth_fusion)
+
 # OpenCV
 find_package( OpenCV REQUIRED )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
@@ -38,6 +41,12 @@ find_package( Qt5Core )
 find_package( Qt5OpenGL )
 find_package( Qt5Widgets )
 
+# ARToolkit
+# TODO: learn how to import it
+# TODO: third_party?
+include_directories( c:/opt/local/include )
+link_directories( c:/opt/local/lib )
+
 # libcgt
 include_directories( ../libcgt/build/lib/include )
 include_directories( ../libcgt/build/lib/include/core )
@@ -68,12 +77,25 @@ target_link_libraries( depth_fusion
 	debug cgt_camera_wrappersd
 	debug cgt_opencv_interopd
 	debug cgt_qt_interopd
+	debug ARd
+	debug AR2d
+	debug ARICPd
+	debug ARgsub_lited
+	debug ARMultid
+	debug ARUtild
 	optimized cgt_core
 	optimized cgt_cuda
 	optimized cgt_gl
 	optimized cgt_camera_wrappers
 	optimized cgt_opencv_interop
-	optimized cgt_qt_interop )
+	optimized cgt_qt_interop
+	optimized AR
+	optimized AR2
+	optimized ARgsub_lite
+	optimized ARICP
+	optimized ARMulti
+	optimized ARUtil
+)
 
 # TODO: make this build on Linux. It might need -l GL.
 #target_link_libraries( depth_fusion GL GLEW::GLEW Qt5::Core Qt5::OpenGL

@@ -26,6 +26,11 @@ ControlWidget::ControlWidget(QWidget* parent) :
     this, &ControlWidget::pauseClicked);
   layout->addWidget(pause_button);
 
+  QPushButton* reset_button = new QPushButton("Reset");
+  QObject::connect( reset_button, &QPushButton::clicked,
+    this, &ControlWidget::resetClicked);
+  layout->addWidget(reset_button);
+
   QPushButton* save_mesh_button = new QPushButton("Save Mesh");
   QObject::connect(save_mesh_button, &QPushButton::clicked,
     this, &ControlWidget::OnSaveMeshClicked);
@@ -51,18 +56,13 @@ void ControlWidget::OnSaveMeshClicked() {
 }
 
 void ControlWidget::OnSavePoseClicked() {
-  QString depth_filename = QFileDialog::getSaveFileName(this,
-    "Save Depth Pose Stream",
-    QString(),
-    "Pose Streams (*.pose)"
-  );
-  QString color_filename = QFileDialog::getSaveFileName(this,
-    "Save Color Pose Stream",
+  QString filename = QFileDialog::getSaveFileName(this,
+    "Save Pose Stream",
     QString(),
     "Pose Streams (*.pose)"
   );
 
-  if (depth_filename != "" || color_filename != "") {
-    emit savePoseClicked(depth_filename, color_filename);
+  if (filename != "") {
+    emit savePoseClicked(filename);
   }
 }

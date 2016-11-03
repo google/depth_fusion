@@ -312,7 +312,7 @@ ProjectivePointPlaneICP::Result ProjectivePointPlaneICP::EstimatePose(
     Matrix4f::inverseEuclidean(camera_from_world));
 
   auto t1 = std::chrono::high_resolution_clock::now();
-  printf("ICP took %lld ms\n", libcgt::core::timeutils::dtMS(t0, t1));
+  printf("ICP took %lld ms\n", libcgt::core::time::dtMS(t0, t1));
 
   return result;
 }

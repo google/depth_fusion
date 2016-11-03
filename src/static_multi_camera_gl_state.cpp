@@ -51,11 +51,13 @@ const std::string kDrawSingleColorFSSrc =
 
 // TODO: shaders can be shared GL state
 
+const bool kDrawUnprojectedPointCloud = false;
 const bool kDrawFullscreenRaycast = true;
-const int kFullscreenRaycastDownsampleFactor = 4;
+const int kFullscreenRaycastDownsampleFactor = 1;
 
 StaticMultiCameraGLState::StaticMultiCameraGLState(
-  StaticMultiCameraPipeline* pipeline) :
+  StaticMultiCameraPipeline* pipeline, QOpenGLWidget* parent) :
+  parent_(parent),
   pipeline_(pipeline),
   depth_camera_frusta_(pipeline->NumCameras()),
   free_camera_world_positions_tex_(
@@ -203,7 +205,9 @@ void StaticMultiCameraGLState::Render(const PerspectiveCamera& free_camera) {
 
   DrawWorldAxes();
   DrawCameraFrustaAndTSDFGrid();
-  DrawUnprojectedPointClouds();
+  if (kDrawUnprojectedPointCloud) {
+    DrawUnprojectedPointClouds();
+  }
   if (kDrawFullscreenRaycast) {
     DrawFullscreenRaycast();
   }

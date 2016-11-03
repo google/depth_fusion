@@ -36,13 +36,14 @@ class MainController : public QObject {
 
    // HACK
    std::vector<RgbdInput> inputs_;
-   StaticMultiCameraPipeline* smc_pipeline_;
+   StaticMultiCameraPipeline* smc_pipeline_ = nullptr;
 
  public slots:
 
   void OnPauseClicked();
+  void OnResetClicked();
   void OnSaveMeshClicked(QString filename);
-  void OnSavePoseClicked(QString depth_filename, QString color_filename);
+  void OnSavePoseClicked(QString filename);
 
  private slots:
 
@@ -51,14 +52,14 @@ class MainController : public QObject {
  private:
 
   // Data.
-  RgbdInput* input_;
-  RegularGridFusionPipeline* pipeline_;
+  RgbdInput* input_ = nullptr;
+  RegularGridFusionPipeline* pipeline_ = nullptr;
 
   // GUI.
-  ControlWidget* control_widget_;
-  MainWidget* main_widget_;
+  ControlWidget* control_widget_ = nullptr;
+  MainWidget* main_widget_ = nullptr;
 
-  QTimer* read_input_timer_;
+  QTimer* read_input_timer_ = nullptr;
 
 };
 

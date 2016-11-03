@@ -40,7 +40,9 @@ using libcgt::core::geometry::translate;
 namespace {
   void DebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
     GLsizei length, const GLchar* message, const void* userParam) {
-    fprintf(stderr, "[GL DEBUG]: %s\n", message);
+    if (severity != GL_DEBUG_SEVERITY_NOTIFICATION) {
+      fprintf(stderr, "[GL DEBUG]: %s\n", message);
+    }
   }
 }
 
@@ -82,21 +84,24 @@ void MainWidget::initializeGL() {
     fprintf(stderr, "Error initializing GLEW: %s\n", glewGetErrorString(err));
     exit(1);
   }
+
 #if _DEBUG
   glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
   glDebugMessageCallback(DebugCallback, this);
 #endif
+
   glClearColor(0, 0, 0, 0);
   glEnable(GL_DEPTH_TEST);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glBlendEquation(GL_FUNC_ADD);
 
   if (pipeline_ != nullptr) {
-    gl_state_ = std::make_unique<GLState>(pipeline_);
+    gl_state_ = std::make_unique<GLState>(pipeline_, this);
   }
 
   if (smc_pipeline_ != nullptr) {
-    smc_gl_state_ = std::make_unique<StaticMultiCameraGLState>(smc_pipeline_);
+    smc_gl_state_ = std::make_unique<StaticMultiCameraGLState>(
+      smc_pipeline_, this);
   }
 }
 

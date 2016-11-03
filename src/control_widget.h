@@ -27,8 +27,9 @@ class ControlWidget : public QWidget {
  signals:
 
    void pauseClicked();
+   void resetClicked();
    void saveMeshClicked(QString filename);
-   void savePoseClicked(QString depth_filename, QString color_filename);
+   void savePoseClicked(QString filename);
 
  private slots:
 

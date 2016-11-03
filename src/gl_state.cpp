@@ -53,11 +53,10 @@ const bool kDrawUnprojectedPointCloud = true;
 const bool kDrawFullscreenRaycast = true;
 const int kFullscreenRaycastDownsampleFactor = 4;
 
-GLState::GLState(RegularGridFusionPipeline* pipeline) :
+GLState::GLState(RegularGridFusionPipeline* pipeline, QOpenGLWidget* parent) :
   // HACK
+  parent_(parent),
   pipeline_(pipeline),
-  board_rectangle_(kGridBoard),
-  board_texture_(pipeline->GetBoardImage().size(), GLImageInternalFormat::R8),
   color_texture_(pipeline->GetCameraParameters().color.resolution,
     GLImageInternalFormat::RGB8),
   color_tracking_vis_texture_(pipeline->GetCameraParameters().color.resolution,
@@ -93,8 +92,6 @@ GLState::GLState(RegularGridFusionPipeline* pipeline) :
     Texture2D::MapFlags::WRITE_DISCARD) {
   LoadShaders();
 
-  board_texture_.set(pipeline->GetBoardImage());
-
   tracked_rgb_camera_.updateColor({ 1, 0, 0, 1 });
   tracked_depth_camera_.updateColor({ 0, 0, 1, 1 });
 
@@ -122,7 +119,6 @@ GLState::GLState(RegularGridFusionPipeline* pipeline) :
     GLTexture::SwizzleTarget::RED,
     GLTexture::SwizzleTarget::ONE
   };
-  board_texture_.setSwizzleRGBA(swizzle_rrr1);
   depth_texture_.setSwizzleRGBA(swizzle_rrr1);
   smoothed_depth_tex_.texture().setSwizzleRGBA(swizzle_rrr1);
 
@@ -133,8 +129,15 @@ GLState::GLState(RegularGridFusionPipeline* pipeline) :
   linear_sampler_.setWrapModes(GLWrapMode::CLAMP_TO_EDGE);
 }
 
-void GLState::NotifyTSDFUpdated() {
-  tsdf_is_dirty_ = true;
+void GLState::OnPipelineDataChanged(PipelineDataType type) {
+  // HACK: we use |= instead of = here.
+  // The app is stupidly threaded and there may be multiple signals arriving
+  // before a single paint. As a hack, we OR them together to bundle the
+  // update.
+  changed_pipeline_data_type_ |= type;
+  if (changed_pipeline_data_type_ != PipelineDataType::NONE) {
+    parent_->update();
+  }
 }
 
 void GLState::Resize(const Vector2i& size) {
@@ -160,58 +163,73 @@ void GLState::Resize(const Vector2i& size) {
 }
 
 void GLState::Render(const PerspectiveCamera& free_camera) {
-  if (free_camera != free_camera_) {
-    free_camera_ = free_camera;
-    tsdf_is_dirty_ = true;
+  printf("in GLState::Render(), changed_pipeline_data_type_ = 0x%x\n", changed_pipeline_data_type_);
+  int foo = static_cast<int>(changed_pipeline_data_type_ & PipelineDataType::INPUT_COLOR);
+  printf( "foo = %d decimal, 0x%x hex\n", foo, foo );
+  if (pipeline_ == nullptr) {
+    return;
   }
 
-  if (pipeline_ != nullptr) {
-	    InputBuffer& input_buffer = pipeline_->GetInputBuffer();
-      // TODO: notify that it has a new input. Mark texture as dirty.
-      color_texture_.set(input_buffer.color_rgb);
-      depth_texture_.set(input_buffer.depth_meters);
+  bool camera_moved = false;
+  if (free_camera != free_camera_) {
+    free_camera_ = free_camera;
+    camera_moved = true;
+  }
 
-      {
-        auto mr = smoothed_depth_tex_.map();
-        pipeline_->SmoothedDepthMeters().copyToArray( mr.array() );
-      }
+  // Update buffers.
+  InputBuffer& input_buffer = pipeline_->GetInputBuffer();
+  if (notZero(
+    changed_pipeline_data_type_ & PipelineDataType::INPUT_COLOR)) {
+    printf("Updating color input vis\n");
+    color_texture_.set(input_buffer.color_rgb);
+  }
 
-      {
-        auto mr = smoothed_incoming_normals_tex_.map();
-        pipeline_->SmoothedIncomingNormals().copyToArray( mr.array() );
-      }
+  if (notZero(
+    changed_pipeline_data_type_ & PipelineDataType::INPUT_DEPTH)) {
+    depth_texture_.set(input_buffer.depth_meters);
+  }
 
-      // TODO: Ask the pipeline's pose estimator for a visualization of color
-      // tracking.
+  if (notZero(
+    changed_pipeline_data_type_ & PipelineDataType::SMOOTHED_DEPTH)) {
+    auto mr0 = smoothed_depth_tex_.map();
+    pipeline_->SmoothedDepthMeters().copyToArray(mr0.array());
+    auto mr1 = smoothed_incoming_normals_tex_.map();
+    pipeline_->SmoothedIncomingNormals().copyToArray(mr1.array());
+  }
 
-      // TODO: pipeline emits notification that pose has changed
-      {
-        auto mr = pose_estimation_vis_tex_.map();
-        pipeline_->PoseEstimationVisualization().copyToArray(mr.array());
-      }
-
-      // TODO: correctly use tsdf_is_dirty_
-      {
-        auto mr = raycasted_normals_tex_.map();
-        pipeline_->RaycastNormals().copyToArray(mr.array());
-      }
-
-      tracked_rgb_camera_.updatePositions(
-        pipeline_->ColorCamera());
-      tracked_depth_camera_.updatePositions(
-        pipeline_->DepthCamera());
+  if (notZero(
+    changed_pipeline_data_type_ & PipelineDataType::CAMERA_POSE)) {
+    {
+      auto mr = pose_estimation_vis_tex_.map();
+      pipeline_->PoseEstimationVisualization().copyToArray(mr.array());
     }
+
+    tracked_rgb_camera_.updatePositions(
+      pipeline_->ColorCamera());
+    tracked_depth_camera_.updatePositions(
+      pipeline_->DepthCamera());
+  }
+
+  if (notZero(
+    changed_pipeline_data_type_ & PipelineDataType::RAYCAST_NORMALS)) {
+    auto mr = raycasted_normals_tex_.map();
+    pipeline_->RaycastNormals().copyToArray( mr.array() );
+  }
 
   DrawInputsAndIntermediates();
   DrawWorldAxes();
-  DrawColorTrackingBoard();
   if (kDrawUnprojectedPointCloud) {
     DrawUnprojectedPointCloud();
   }
   DrawCameraFrustaAndTSDFGrid();
   if (kDrawFullscreenRaycast) {
+    if (camera_moved ||
+      notZero(changed_pipeline_data_type_ & PipelineDataType::TSDF)) {
     DrawFullscreenRaycast();
+    }
   }
+
+  changed_pipeline_data_type_ = PipelineDataType::NONE;
 }
 
 void GLState::LoadShaders() {
@@ -266,24 +284,6 @@ void GLState::DrawWorldAxes() {
   GLProgramPipeline::unbindAll();
 }
 
-void GLState::DrawColorTrackingBoard() {
-  // TODO: check if it's not null.
-  // TODO: bindless texture
-  const int kColorTextureUnit = 0;
-  board_texture_.bind(kColorTextureUnit);
-
-  GLSeparableProgram& vs = programs_["drawTextureVS"];
-  GLSeparableProgram& fs = programs_["drawTextureFS"];
-  vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
-  fs.setUniformInt(0, kColorTextureUnit);
-  draw_texture_.bind();
-
-  board_rectangle_.draw();
-
-  board_texture_.unbind(kColorTextureUnit);
-  GLProgramPipeline::unbindAll();
-}
-
 void GLState::DrawCameraFrustaAndTSDFGrid() {
   GLSeparableProgram& vs = programs_[ "drawColorVS" ];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
@@ -333,7 +333,7 @@ void GLState::DrawUnprojectedPointCloud() {
   GLSamplerObject::unbind(kColorTextureUnit);
 }
 
-// HACK: why is identity right?
+// HACK: why is the following wrong and using identity right?
 namespace {
 Matrix4f normalsToRGBA()
 {
@@ -349,18 +349,15 @@ Matrix4f normalsToRGBA()
 
 void GLState::DrawFullscreenRaycast() {
   // Update the buffer.
-  if (tsdf_is_dirty_) {
-    pipeline_->Raycast(free_camera_,
-      free_camera_world_positions_, free_camera_world_normals_);
-    {
-      auto mr = free_camera_world_positions_tex_.map();
-      free_camera_world_positions_.copyToArray(mr.array());
-    }
-    {
-      auto mr = free_camera_world_normals_tex_.map();
-      free_camera_world_normals_.copyToArray(mr.array());
-    }
-    tsdf_is_dirty_ = false;
+  pipeline_->Raycast(free_camera_,
+    free_camera_world_positions_, free_camera_world_normals_);
+  {
+    auto mr = free_camera_world_positions_tex_.map();
+    free_camera_world_positions_.copyToArray(mr.array());
+  }
+  {
+    auto mr = free_camera_world_normals_tex_.map();
+    free_camera_world_normals_.copyToArray(mr.array());
   }
 
   glDisable(GL_DEPTH_TEST);

@@ -27,13 +27,15 @@
 #include "rgbd_camera_parameters.h"
 #include "rgbd_input.h"
 
-using libcgt::camera_wrappers::StreamConfig;
-using libcgt::core::arrayutils::flipY;
-using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::SimilarityTransform;
 
+#define RUN_MULTI_CAM 0
+#define MULTI_CAM_GUI 0
+
 int SingleMovingCameraMain(int argc, char* argv[]) {
+
+  // TODO: use gflags
   if (argc < 3) {
     printf("Usage: %s <calibration_dir> <rgbd_file>\n", argv[0]);
     return 1;
@@ -65,27 +67,33 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
       )
     );
 
+#if 0
   RgbdInput rgbd_input(RgbdInput::InputType::FILE,
                        rgbd_stream_filename.c_str());
+#else
+  RgbdInput rgbd_input(RgbdInput::InputType::OPENNI2, nullptr);
+#endif
+
+  PoseFrame initial_pose_frame = {};
+  initial_pose_frame.method = PoseFrame::EstimationMethod::FIXED_INITIAL;
+  initial_pose_frame.depth_camera_from_world = kInitialDepthCameraFromWorld;
+  initial_pose_frame.color_camera_from_world =
+    camera_params.ConvertToColorCameraFromWorld(kInitialDepthCameraFromWorld);
+
   RegularGridFusionPipeline pipeline(camera_params,
-    kRegularGridResolution, kInitialWorldFromGrid,
-    true, kInitialDepthCameraFromWorld);
+    kRegularGridResolution, kInitialWorldFromGrid, initial_pose_frame);
 
   // TODO: pipeline->SetTracker()...
   // TODO: add different color pose tracking options using gflags.
-  const int kBoardWidthPixels = 3300;
-  const int kBoardHeightPixels = 2550;
-  Array2D<uint8_t> board_image{ { kBoardWidthPixels, kBoardHeightPixels } };
-  pipeline.SetBoardImage(board_image);
-
   ControlWidget control_widget;
   control_widget.setGeometry(50, 50, 150, 150);
   control_widget.show();
 
   MainWidget main_widget;
   main_widget.SetPipeline(&pipeline);
+  main_widget.show();
 
-  const int window_width = 1920;
+  const int window_width = 2240;
   const int window_height = 1200;
   int x = control_widget.geometry().right();
   int y = control_widget.geometry().top();
@@ -94,7 +102,6 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
 
   MainController controller(&rgbd_input, &pipeline,
     &control_widget, &main_widget);
-  main_widget.show();
   return app.exec();
 }
 
@@ -199,10 +206,10 @@ int StaticMultiCameraMain(int argc, char* argv[]) {
   for(int i = 0; i < 3; ++i) {
     // Convert translation from SfM convention (R * (x[0:2] - x[3] * c)) to
     // standard convention: [R, t]: R * x[0:2] + t.
-    camera_poses[ i ].translation =
-      -camera_poses[ i ].rotation * camera_poses[ i ].translation;
+    camera_poses[i].translation =
+      -camera_poses[i].rotation * camera_poses[i].translation;
     // Convert from y-down to y-up.
-    camera_poses[ i ] = rot180 * camera_poses[ i ] * rot180;
+    camera_poses[i] = rot180 * camera_poses[i] * rot180;
   }
 
   // HACK: where to place grid.
@@ -231,7 +238,7 @@ int StaticMultiCameraMain(int argc, char* argv[]) {
   StaticMultiCameraPipeline pipeline(camera_params, camera_poses,
                                      Vector3i{kRegularGridResolution},
                                      initial_world_from_grid, kMaxTSDFValue);
-#if 0
+#if MULTI_CAM_GUI
   ControlWidget control_widget;
   control_widget.setGeometry(50, 50, 150, 150);
   control_widget.show();
@@ -284,103 +291,24 @@ int StaticMultiCameraMain(int argc, char* argv[]) {
 
       pipeline.NotifyInputUpdated(i, rgb_updated, depth_updated);
     }
+    // TODO: shouldn't have to call this.
     pipeline.Fuse();
     pipeline.Triangulate(rot180.asMatrix()).saveOBJ(
     nfb.filenameForNumber(frame_index));
     ++frame_index;
+    if (frame_index > 1799) {
+      break;
+    }
   }
+
+  return 0;
 #endif
 }
 
 int main(int argc, char* argv[]) {
+#if RUN_MULTI_CAM
+  return StaticMultiCameraMain(argc, argv);
+#else
   return SingleMovingCameraMain(argc, argv);
-  //return StaticMultiCameraMain(argc, argv);
+#endif
 }
-
-#if 0
-// This is live input reading code. Move into rgbd_input.cpp.
-
-bool kDoColorTracking = false;
-const int kWaitMillis = 33;
-
-#if USE_KINECT1X
-Array2D<uint8x4> bgra_frame(kColorResolution);
-Array2D<uint16_t> input_depth_frame(kDepthResolution);
-cv::Mat_<cv::Vec3b> color_vis_ocv(kColorResolution.y, kColorResolution.x);
-Array2DView<uint8x3> color_vis_view =
-cvMatAsArray2DView<uint8x3>(color_vis_ocv);
-
-InputBuffer state(kColorResolution, kDepthResolution);
-
-libcgt::kinect1x::KinectCamera::Frame frame;
-frame.bgra = bgra_frame;
-frame.extendedDepth = input_depth_frame;
-#endif
-
-#if 0
-// OpenNI2
-Array2D<uint8x3> rgb_frame(camera.colorConfig().resolution);
-Array2D<uint16_t> input_depth_frame(camera.depthConfig().resolution);
-cv::Mat_<cv::Vec3b> color_vis_ocv(camera.colorConfig().resolution.y,
-	camera.colorConfig().resolution.x);
-Array2DView<uint8x3> color_vis_view =
-cvMatAsArray2DView<uint8x3>(color_vis_ocv);
-
-OpenNI2Camera::Frame frame;
-frame.rgb = rgb_frame.writeView();
-frame.depth = input_depth_frame;
-
-InputBuffer state(camera.colorConfig().resolution,
-	camera.depthConfig().resolution);
-#endif
-
-#endif
-
-#if 0
-// TODO: This is color based tracking code, which needs to be moved into its
-// own class and integrated into RegularGridFusionPipeline.
-
-#include <core/time/TimeUtils.h>
-
-#include <opencv2/core.hpp>
-#include <opencv2/calib3d.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv_interop/arrayutils.h>
-#include <opencv_interop/vecmathutils.h>
-#include <chrono>
-
-using libcgt::core::timeutils::dtMS;
-using libcgt::opencv_interop::array2DViewAsCvMat;
-using libcgt::opencv_interop::cvMatAsArray2DView;
-using libcgt::opencv_interop::toCV;
-
-cv::Mat color_intrinsics_ocv = toCV(camera.colorIntrinsics().asMatrix());
-
-ArucoDetector::PoseEstimate pose;
-pose.valid = false;
-if (kDoColorTracking)
-{
-  cv::Mat raw_color_ocv_view = array2DViewAsCvMat(
-    state->raw_color.writeView());
-  auto track_t0 = std::chrono::high_resolution_clock::now();
-  ArucoDetector::DetectionResult markers = detector.Detect(
-    raw_color_ocv_view);
-  auto track_t1 = std::chrono::high_resolution_clock::now();
-  detector.Refine(raw_color_ocv_view, color_intrinsics_ocv,
-    color_dist_coeffs, &markers);
-  auto track_t2 = std::chrono::high_resolution_clock::now();
-  pose = detector.EstimatePose(markers,
-    color_intrinsics_ocv, color_dist_coeffs);
-  auto track_t3 = std::chrono::high_resolution_clock::now();
-
-  printf("detection took %lld ms\n", dtMS(track_t0, track_t1));
-  printf("refine took %lld ms\n", dtMS(track_t1, track_t2));
-  printf("pose estimation took %lld ms\n", dtMS(track_t2, track_t3));
-
-  raw_color_ocv_view.copyTo(color_vis_ocv);
-  ArucoDetector::VisualizeDetections(markers, true, &color_vis_ocv);
-  detector.VisualizePoseEstimate(pose,
-    color_intrinsics_ocv, color_dist_coeffs,
-    &color_vis_ocv);
-}
-#endif

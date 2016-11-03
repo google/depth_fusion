@@ -37,40 +37,27 @@ MainController::MainController(
 
   QObject::connect(control_widget, &ControlWidget::pauseClicked,
     this, &MainController::OnPauseClicked);
+  QObject::connect(control_widget, &ControlWidget::resetClicked,
+    this, &MainController::OnResetClicked);
   QObject::connect(control_widget, &ControlWidget::saveMeshClicked,
     this, &MainController::OnSaveMeshClicked);
   QObject::connect(control_widget, &ControlWidget::savePoseClicked,
     this, &MainController::OnSavePoseClicked);
+
+  if (pipeline != nullptr) {
+    QObject::connect(pipeline, &RegularGridFusionPipeline::dataChanged,
+      main_widget_->GetSingleCameraGLState(), &GLState::OnPipelineDataChanged);
+  }
 }
 
 void MainController::OnReadInput()
 {
 #if USE_SINGLE_MOVING_CAMERA
-  bool rgb_updated;
+  bool color_updated;
   bool depth_updated;
-  input_->read(&(pipeline_->GetInputBuffer()), &rgb_updated, &depth_updated);
+  input_->read(&(pipeline_->GetInputBuffer()), &color_updated, &depth_updated);
+  pipeline_->NotifyInputUpdated(color_updated, depth_updated);
 
-  pipeline_->NotifyInputUpdated(rgb_updated, depth_updated);
-
-  bool tracking_succeeded = false;
-  if (depth_updated) {
-    // TODO: put frameId and timestamps into history and input
-
-    tracking_succeeded = pipeline_->UpdatePoseWithICP();
-    if (tracking_succeeded) {
-      pipeline_->Fuse();
-      pipeline_->Raycast();
-    }
-  }
-
-  if (rgb_updated || depth_updated) {
-    main_widget_->GetSingleCameraGLState()->NotifyTSDFUpdated();
-    main_widget_->update();
-  }
-
-  if (tracking_succeeded) {
-    // TODO: main_widget->...notify raycast changed
-  }
 #else
   for (size_t i = 0; i < inputs_.size(); ++i) {
     bool rgb_updated;
@@ -102,6 +89,15 @@ void MainController::OnPauseClicked() {
   }
 }
 
+void MainController::OnResetClicked() {
+  if (pipeline_ != nullptr) {
+    pipeline_->Reset();
+  }
+  if (smc_pipeline_ != nullptr) {
+    smc_pipeline_->Reset();
+  }
+}
+
 void MainController::OnSaveMeshClicked(QString filename) {
   // HACK:
 #if USE_SINGLE_MOVING_CAMERA
@@ -117,6 +113,7 @@ void MainController::OnSaveMeshClicked(QString filename) {
 }
 
 void SavePoses(QString filename, const std::vector<PoseFrame> poses) {
+#if 0
   libcgt::camera_wrappers::PoseStreamMetadata metadata;
   metadata.direction = libcgt::camera_wrappers::PoseStreamTransformDirection::CAMERA_FROM_WORLD;
   metadata.format = libcgt::camera_wrappers::PoseStreamFormat::ROTATION_MATRIX_3X3_COL_MAJOR_AND_TRANSLATION_VECTOR_FLOAT;
@@ -127,20 +124,15 @@ void SavePoses(QString filename, const std::vector<PoseFrame> poses) {
   // TODO(jiawen): messagebox for success
   for (size_t i = 0; i < poses.size(); ++i) {
     bool succeeded = output_stream.write(
-      poses[i].frame_index, poses[i].timestamp,
+      poses[i].frame_index, poses[i].timestamp_ns,
       poses[i].camera_from_world.rotation,
       poses[i].camera_from_world.translation);
   }
+#endif
 }
 
-void MainController::OnSavePoseClicked(QString depth_filename,
-  QString color_filename) {
-  if (depth_filename != "") {
-    const auto& depth_poses = pipeline_->DepthPoseHistory();
-    SavePoses(depth_filename, depth_poses);
-  }
-  if (color_filename != "") {
-    const auto& color_poses = pipeline_->ColorPoseHistoryEstimatedDepth();
-    SavePoses(color_filename, color_poses);
+void MainController::OnSavePoseClicked(QString filename) {
+  if (filename != "") {
+    SavePoses(filename, pipeline_->PoseHistory());
   }
 }

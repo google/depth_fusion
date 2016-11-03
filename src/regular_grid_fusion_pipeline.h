@@ -14,6 +14,8 @@
 #ifndef REGULAR_GRID_FUSION_PIPELINE_H
 #define REGULAR_GRID_FUSION_PIPELINE_H
 
+#include <QObject>
+
 #include <core/cameras/PerspectiveCamera.h>
 #include <core/geometry/TriangleMesh.h>
 #include <core/vecmath/Vector2i.h>
@@ -21,33 +23,28 @@
 #include <core/vecmath/EuclideanTransform.h>
 #include <cuda/DeviceArray2D.h>
 
+#include "artoolkit_pose_estimator.h"
 #include "regular_grid_tsdf.h"
 #include "rgbd_camera_parameters.h"
 #include "depth_processor.h"
-#include "projective_point_plane_icp.h"
 #include "input_buffer.h"
+#include "pipeline_data_type.h"
 #include "pose_frame.h"
+#include "projective_point_plane_icp.h"
 
-class RegularGridFusionPipeline {
+class RegularGridFusionPipeline : public QObject {
+ Q_OBJECT
 
   using EuclideanTransform = libcgt::core::vecmath::EuclideanTransform;
   using SimilarityTransform = libcgt::core::vecmath::SimilarityTransform;
 
  public:
 
-  // TODO(jiawen): Allow initial pose using color from world or
-  // depth from world but not both.
-  //
   RegularGridFusionPipeline(
     const RGBDCameraParameters& camera_params,
     const Vector3i& grid_resolution,
     const SimilarityTransform& world_from_grid,
-    // true if it's the depth camera, false if it's the color camera
-    bool initial_pose_depth,
-    const EuclideanTransform& initial_camera_from_world);
-
-  Array2DView<const uint8_t> GetBoardImage() const;
-  void SetBoardImage(Array2D<uint8_t> board_image);
+    const PoseFrame& initial_pose);
 
   void Reset();
 
@@ -71,6 +68,8 @@ class RegularGridFusionPipeline {
   // - runs raycasting for display and caches it for the next frame
   bool UpdatePoseWithICP();
 
+  bool UpdatePoseWithColorCamera();
+
   // Update the regular grid with the latest image.
   void Fuse();
 
@@ -85,13 +84,7 @@ class RegularGridFusionPipeline {
   TriangleMesh Triangulate() const;
 
   // Returns CameraFromworld.
-  // Each frame is directly transformed from those in DepthPoseHistory.
-  // I.e., each frame has the same frame_index and timestamp, and the transform
-  // is simply color_from_depth * DepthPoseHistory[i].camera_from_world.
-  const std::vector<PoseFrame>& ColorPoseHistoryEstimatedDepth() const;
-
-  // Return CameraFromWorld.
-  const std::vector<PoseFrame>& DepthPoseHistory() const;
+  const std::vector<PoseFrame>& PoseHistory() const;
 
   const DeviceArray2D<float>& SmoothedDepthMeters() const;
 
@@ -102,6 +95,11 @@ class RegularGridFusionPipeline {
 
   // In world space.
   const DeviceArray2D<float4>& RaycastNormals() const;
+
+ signals:
+
+  // Notify subscribers that data flowing through the pipeline has changed.
+  void dataChanged(PipelineDataType type);
 
  private:
   // CPU input buffers.
@@ -122,6 +120,7 @@ class RegularGridFusionPipeline {
   DeviceArray2D<uchar4> pose_estimation_vis_;
 
   // Raycasted world-space points and normals.
+  PoseFrame last_raycast_pose_ = {};
   DeviceArray2D<float4> world_points_;
   DeviceArray2D<float4> world_normals_;
 
@@ -130,26 +129,20 @@ class RegularGridFusionPipeline {
   RegularGridTSDF regular_grid_;
 
   // TODO: PoseEstimator class
-  Array2D<uint8_t> board_image_;
-  const int kMaxSuccessiveFailuresBeforeReset = 10;
+  const int kMaxSuccessiveFailuresBeforeReset = 1000;
   int num_successive_failures_ = 0;
   ProjectivePointPlaneICP icp_;
+  ARToolkitPoseEstimator color_pose_estimator_;
 
-  const EuclideanTransform initial_depth_camera_from_world_;
+  const PoseFrame initial_pose_;
+
   // Stores camera_from_world.
-  std::vector<PoseFrame> depth_pose_history_;
-  std::vector<PoseFrame> color_pose_history_estimated_from_depth_;
+  std::vector<PoseFrame> pose_history_;
 
   const RGBDCameraParameters camera_params_;
   // camera_params_.depth_intrinsics_, stored as a Vector4f.
   const Vector4f depth_intrinsics_flpp_;
   const Range1f depth_range_;
-
-  // Using the known extrinsic calibration between the color and depth
-  // cameras, convert a depth camera_from_world pose to a color
-  // camera_from_world pose.
-  EuclideanTransform GetColorCameraFromWorld(
-    const EuclideanTransform& depth_camera_from_world) const;
 };
 
 #endif  // REGULAR_GRID_FUSION_PIPELINE_H

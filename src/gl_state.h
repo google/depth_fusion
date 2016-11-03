@@ -17,6 +17,10 @@
 #include <memory>
 #include <unordered_map>
 
+#include <GL/glew.h>
+#include <QObject>
+#include <QOpenGLWidget>
+
 #include <core/common/Array2D.h>
 
 #include <cuda/DeviceArray2D.h>
@@ -32,6 +36,8 @@
 #include <GL/GL_45/drawables/TexturedRectangle.h>
 #include <GL/GL_45/drawables/WireframeBox.h>
 
+#include "pipeline_data_type.h"
+
 class RegularGridFusionPipeline;
 
 // TODO: rename this struct
@@ -41,16 +47,20 @@ struct RemappedTexture {
   Matrix4f color_transform;
 };
 
-class GLState {
+class GLState : public QObject {
+
+ Q_OBJECT
+
  public:
-  // 11 inches x 8.5 inches is 0.2794 meters x 0.2159 meters.
-  const Rect2f kGridBoard{ { -0.04225f, -0.015f },{ 0.2794f, 0.2159f } };
+  GLState(RegularGridFusionPipeline* pipeline,
+    QOpenGLWidget* parent);
 
-  GLState(RegularGridFusionPipeline* pipeline);
-
-  void NotifyTSDFUpdated();
   void Resize(const Vector2i& size);
   void Render(const PerspectiveCamera& free_camera);
+
+ public slots:
+
+  void OnPipelineDataChanged(PipelineDataType type);
 
  private:
 
@@ -58,7 +68,6 @@ class GLState {
   void LoadShaders();
 
   void DrawWorldAxes();
-  void DrawColorTrackingBoard();
   void DrawUnprojectedPointCloud();
   void DrawFullscreenRaycast();
   void DrawCameraFrustaAndTSDFGrid();
@@ -66,15 +75,14 @@ class GLState {
   void DrawRemappedTextures(const std::vector<RemappedTexture>& textures);
 
   // ----- State -----
+  QOpenGLWidget* parent_ = nullptr;
   RegularGridFusionPipeline* pipeline_ = nullptr;
-  bool tsdf_is_dirty_ = true;
+  PipelineDataType changed_pipeline_data_type_ = PipelineDataType::NONE;
   PerspectiveCamera free_camera_;
 
   // ----- Drawables -----
   Axes world_axes_;
   TexturedRectangle input_buffer_textured_rect_;
-  TexturedRectangle board_rectangle_;
-  GLTexture2D board_texture_;
   Frustum tracked_rgb_camera_;
   Frustum tracked_depth_camera_;
   WireframeBox tsdf_bbox_;
