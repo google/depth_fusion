@@ -47,12 +47,12 @@ struct RemappedTexture {
   Matrix4f color_transform;
 };
 
-class GLState : public QObject {
+class SingleMovingCameraGLState : public QObject {
 
  Q_OBJECT
 
  public:
-  GLState(RegularGridFusionPipeline* pipeline,
+  SingleMovingCameraGLState(RegularGridFusionPipeline* pipeline,
     QOpenGLWidget* parent);
 
   void Resize(const Vector2i& size);

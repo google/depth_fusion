@@ -64,7 +64,7 @@ private:
   std::unique_ptr<OpenNI2Camera> openni2_camera_;
   Array2D<uint8x3> openni2_buffer_rgb_;
   Array2D<uint16_t> openni2_buffer_depth_;
-  OpenNI2Camera::Frame openni2_frame_;
+  OpenNI2Camera::FrameView openni2_frame_;
 
   std::unique_ptr<RGBDInputStream> file_input_stream_;
 

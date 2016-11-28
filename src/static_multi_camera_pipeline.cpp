@@ -42,7 +42,7 @@ StaticMultiCameraPipeline::StaticMultiCameraPipeline(
                                 camera_params[i].depth.resolution);
 
     depth_camera_undistort_maps_[i].copyFromHost(
-      cast<const float2>(camera_params[i].depth.undistortion_map.readView()));
+      cast<float2>(camera_params[i].depth.undistortion_map.readView()));
   }
 }
 

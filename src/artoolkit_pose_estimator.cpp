@@ -144,7 +144,7 @@ ARToolkitPoseEstimator::~ARToolkitPoseEstimator() {
 #include <core/time/TimeUtils.h>
 
 ARToolkitPoseEstimator::Result ARToolkitPoseEstimator::EstimatePose(
-  Array2DView<const uint8x3> bgr) {
+  Array2DReadView<uint8x3> bgr) {
   Result result;
   if (!bgr.packed()) {
     return result;
@@ -158,10 +158,10 @@ ARToolkitPoseEstimator::Result ARToolkitPoseEstimator::EstimatePose(
   //libcgt::core::arrayutils::map(libcgt::core::arrayutils::flipY(bgr), luma_.writeView(),
   libcgt::core::arrayutils::map(bgr, luma_.writeView(),
     [&] ( uint8x3 bgr )
-  {
-    float z = 0.25f * bgr.x + 0.5f * bgr.y + 0.25f * bgr.z;
-    return static_cast< uint8_t >( z );
-  } );
+    {
+      float z = 0.25f * bgr.x + 0.5f * bgr.y + 0.25f * bgr.z;
+      return static_cast< uint8_t >( z );
+    } );
 
   frame.buff = reinterpret_cast<ARUint8*>(const_cast<uint8x3*>(bgr.pointer()));
   frame.buffLuma = luma_.pointer();
@@ -177,7 +177,8 @@ ARToolkitPoseEstimator::Result ARToolkitPoseEstimator::EstimatePose(
     printf("Detected %d markers\n", num_detected_markers);
     if (num_detected_markers > 0) {
       // TODO: arGetTransMatMultiSquareRobust()
-      ARdouble err = arGetTransMatMultiSquare(tracker_3d_, detected_markers,
+      //ARdouble err = arGetTransMatMultiSquare(tracker_3d_, detected_markers,
+      ARdouble err = arGetTransMatMultiSquareRobust(tracker_3d_, detected_markers,
         num_detected_markers, multi_marker_config_);
       if (err != -1.0) {
         Matrix4f trans = ConvertToCameraFromWorldMeters(multi_marker_config_->trans);

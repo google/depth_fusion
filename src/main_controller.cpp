@@ -46,7 +46,8 @@ MainController::MainController(
 
   if (pipeline != nullptr) {
     QObject::connect(pipeline, &RegularGridFusionPipeline::dataChanged,
-      main_widget_->GetSingleCameraGLState(), &GLState::OnPipelineDataChanged);
+      main_widget_->GetSingleMovingCameraGLState(),
+      &SingleMovingCameraGLState::OnPipelineDataChanged);
   }
 }
 

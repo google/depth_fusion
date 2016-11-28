@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "gl_state.h"
+#include "single_moving_camera_gl_state.h"
 
 #include <core/common/ArrayUtils.h>
 
@@ -53,7 +53,8 @@ const bool kDrawUnprojectedPointCloud = true;
 const bool kDrawFullscreenRaycast = true;
 const int kFullscreenRaycastDownsampleFactor = 4;
 
-GLState::GLState(RegularGridFusionPipeline* pipeline, QOpenGLWidget* parent) :
+SingleMovingCameraGLState::SingleMovingCameraGLState(
+  RegularGridFusionPipeline* pipeline, QOpenGLWidget* parent) :
   // HACK
   parent_(parent),
   pipeline_(pipeline),
@@ -103,7 +104,7 @@ GLState::GLState(RegularGridFusionPipeline* pipeline, QOpenGLWidget* parent) :
   // Initialize xy_coords_.
   {
   	auto mb = xy_coords_.mapAttribute<Vector2f>(0);
-  	Array2DView<Vector2f> points2D(mb.view().pointer(),
+  	Array2DWriteView<Vector2f> points2D(mb.view().pointer(),
       pipeline->GetCameraParameters().depth.resolution);
   	for (int y = 0; y < points2D.height(); ++y) {
   		for (int x = 0; x < points2D.width(); ++x) {
@@ -129,7 +130,7 @@ GLState::GLState(RegularGridFusionPipeline* pipeline, QOpenGLWidget* parent) :
   linear_sampler_.setWrapModes(GLWrapMode::CLAMP_TO_EDGE);
 }
 
-void GLState::OnPipelineDataChanged(PipelineDataType type) {
+void SingleMovingCameraGLState::OnPipelineDataChanged(PipelineDataType type) {
   // HACK: we use |= instead of = here.
   // The app is stupidly threaded and there may be multiple signals arriving
   // before a single paint. As a hack, we OR them together to bundle the
@@ -140,7 +141,7 @@ void GLState::OnPipelineDataChanged(PipelineDataType type) {
   }
 }
 
-void GLState::Resize(const Vector2i& size) {
+void SingleMovingCameraGLState::Resize(const Vector2i& size) {
   free_camera_world_positions_.resize(
     size / kFullscreenRaycastDownsampleFactor);
   free_camera_world_normals_.resize(
@@ -162,10 +163,7 @@ void GLState::Resize(const Vector2i& size) {
     );
 }
 
-void GLState::Render(const PerspectiveCamera& free_camera) {
-  printf("in GLState::Render(), changed_pipeline_data_type_ = 0x%x\n", changed_pipeline_data_type_);
-  int foo = static_cast<int>(changed_pipeline_data_type_ & PipelineDataType::INPUT_COLOR);
-  printf( "foo = %d decimal, 0x%x hex\n", foo, foo );
+void SingleMovingCameraGLState::Render(const PerspectiveCamera& free_camera) {
   if (pipeline_ == nullptr) {
     return;
   }
@@ -232,7 +230,7 @@ void GLState::Render(const PerspectiveCamera& free_camera) {
   changed_pipeline_data_type_ = PipelineDataType::NONE;
 }
 
-void GLState::LoadShaders() {
+void SingleMovingCameraGLState::LoadShaders() {
   programs_.emplace("drawColorVS",
     GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
                     kDrawColorVSSrc.c_str()));
@@ -274,7 +272,7 @@ void GLState::LoadShaders() {
 }
 
 
-void GLState::DrawWorldAxes() {
+void SingleMovingCameraGLState::DrawWorldAxes() {
   GLSeparableProgram& vs = programs_["drawColorVS"];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
   draw_color_.bind();
@@ -284,7 +282,7 @@ void GLState::DrawWorldAxes() {
   GLProgramPipeline::unbindAll();
 }
 
-void GLState::DrawCameraFrustaAndTSDFGrid() {
+void SingleMovingCameraGLState::DrawCameraFrustaAndTSDFGrid() {
   GLSeparableProgram& vs = programs_[ "drawColorVS" ];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
   draw_color_.bind();
@@ -296,7 +294,7 @@ void GLState::DrawCameraFrustaAndTSDFGrid() {
   GLProgramPipeline::unbindAll();
 }
 
-void GLState::DrawUnprojectedPointCloud() {
+void SingleMovingCameraGLState::DrawUnprojectedPointCloud() {
   const int kFreeCameraFromWorldLocation = 0;
   const int kDepthCameraFLPPLocation = 1;
   const int kDepthCameraRangeMinMaxLocation = 2;
@@ -347,7 +345,7 @@ Matrix4f normalsToRGBA()
 }
 }
 
-void GLState::DrawFullscreenRaycast() {
+void SingleMovingCameraGLState::DrawFullscreenRaycast() {
   // Update the buffer.
   pipeline_->Raycast(free_camera_,
     free_camera_world_positions_, free_camera_world_normals_);
@@ -388,7 +386,7 @@ using libcgt::core::geometry::translate;
 using libcgt::core::geometry::translate;
 using libcgt::core::math::floorToInt;
 
-void GLState::DrawRemappedTextures(
+void SingleMovingCameraGLState::DrawRemappedTextures(
   const std::vector<RemappedTexture>& textures) {
   glDisable(GL_DEPTH_TEST);
   Rect2i vp = GLUtilities::getViewport();
@@ -414,7 +412,7 @@ void GLState::DrawRemappedTextures(
   glEnable(GL_DEPTH_TEST);
 }
 
-void GLState::DrawInputsAndIntermediates() {
+void SingleMovingCameraGLState::DrawInputsAndIntermediates() {
   Matrix4f depth_rescale_matrix =
     transformBetween(pipeline_->GetCameraParameters().depth.depth_range,
       Range1f::fromMinMax(0.2f, 1.0f));

@@ -48,7 +48,7 @@ RgbdInput::RgbdInput(InputType input_type, const char* filename) :
     openni2_camera_ = std::make_unique<OpenNI2Camera>(config);
     openni2_buffer_rgb_.resize(openni2_camera_->colorConfig().resolution);
     openni2_buffer_depth_.resize(openni2_camera_->depthConfig().resolution);
-    openni2_frame_.rgb = openni2_buffer_rgb_.writeView();
+    openni2_frame_.color = openni2_buffer_rgb_.writeView();
     openni2_frame_.depth = openni2_buffer_depth_.writeView();
     openni2_camera_->start();
   } else if (input_type == InputType::FILE) {
@@ -106,10 +106,10 @@ void RgbdInput::read(InputBuffer* buffer,
     bool succeeded = openni2_camera_->pollAll(openni2_frame_);
     if (openni2_frame_.colorUpdated) {
       // Copy the buffer, flipping it upside down for OpenGL.
-      copy<uint8x3>(openni2_frame_.rgb, flipY(buffer->color_rgb.writeView()));
+      copy<uint8x3>(openni2_frame_.color, flipY(buffer->color_rgb.writeView()));
       // Convert RGB to BGR for OpenCV.
-      RGBToBGR(openni2_frame_.rgb, buffer->color_bgr_ydown.writeView());
-      buffer->color_timestamp_ns = openni2_frame_.colorTimestamp;
+      RGBToBGR(openni2_frame_.color, buffer->color_bgr_ydown.writeView());
+      buffer->color_timestamp_ns = openni2_frame_.colorTimestampNS;
       buffer->color_frame_index = openni2_frame_.colorFrameNumber;
       *rgb_updated = openni2_frame_.colorUpdated;
     }
@@ -117,7 +117,7 @@ void RgbdInput::read(InputBuffer* buffer,
     if (openni2_frame_.depthUpdated) {
       rawDepthMapToMeters(openni2_frame_.depth, buffer->depth_meters,
         false, true);
-      buffer->depth_timestamp_ns = openni2_frame_.depthTimestamp;
+      buffer->depth_timestamp_ns = openni2_frame_.depthTimestampNS;
       buffer->depth_frame_index = openni2_frame_.depthFrameNumber;
       *depth_updated = openni2_frame_.depthUpdated;
     }
@@ -126,7 +126,7 @@ void RgbdInput::read(InputBuffer* buffer,
     uint32_t stream_id;
     int64_t timestamp_ns;
     int32_t frame_index;
-    Array1DView<const uint8_t> src = file_input_stream_->read(
+    Array1DReadView<uint8_t> src = file_input_stream_->read(
       stream_id, frame_index, timestamp_ns);
 
     if (src.notNull()) {
@@ -134,7 +134,7 @@ void RgbdInput::read(InputBuffer* buffer,
         buffer->color_timestamp_ns = timestamp_ns;
         buffer->color_frame_index = frame_index;
 
-        Array2DView<const uint8x3> src_rgb(
+        Array2DReadView<uint8x3> src_rgb(
           src.pointer(), color_metadata_.size);
         RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
         bool succeeded = copy(src_rgb, flipY(buffer->color_rgb.writeView()));
@@ -145,13 +145,13 @@ void RgbdInput::read(InputBuffer* buffer,
         buffer->depth_frame_index = frame_index;
 
         if (depth_metadata_.format == PixelFormat::DEPTH_MM_U16) {
-          Array2DView<const uint16_t> src_depth(src.pointer(),
+          Array2DReadView<uint16_t> src_depth(src.pointer(),
             depth_metadata_.size);
           rawDepthMapToMeters(src_depth, buffer->depth_meters,
             false);
           *depth_updated = true;
         } else if(depth_metadata_.format == PixelFormat::DEPTH_M_F32) {
-          Array2DView<const float> src_depth(src.pointer(),
+          Array2DReadView<float> src_depth(src.pointer(),
             depth_metadata_.size);
           bool succeeded = copy(src_depth, buffer->depth_meters.writeView());
           *depth_updated = succeeded;

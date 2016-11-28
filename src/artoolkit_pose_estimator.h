@@ -17,7 +17,6 @@
 #include <AR/arMulti.h>
 
 #include <core/common/Array2D.h>
-#include <core/common/Array2DView.h>
 #include <core/common/BasicTypes.h>
 #include <core/vecmath/EuclideanTransform.h>
 
@@ -37,7 +36,7 @@ class ARToolkitPoseEstimator {
      const std::string& marker_cube_filename);
    ~ARToolkitPoseEstimator();
 
-   Result EstimatePose(Array2DView<const uint8x3> bgr);
+   Result EstimatePose(Array2DReadView<uint8x3> bgr);
 
  private:
 

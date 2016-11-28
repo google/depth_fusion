@@ -145,7 +145,7 @@ StaticMultiCameraGLState::StaticMultiCameraGLState(
   // Initialize xy_coords_.
   {
     auto mb = xy_coords_.mapAttribute<Vector2f>(0);
-    Array2DView<Vector2f> points2D(mb.view().pointer(), depth_resolution);
+    Array2DWriteView<Vector2f> points2D(mb.view().pointer(), depth_resolution);
     for2D(depth_resolution, [&](const Vector2i& xy) {
         points2D[xy] = Vector2f{xy.x + 0.5f, xy.y + 0.5f};
     });

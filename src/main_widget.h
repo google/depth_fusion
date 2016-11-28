@@ -25,7 +25,7 @@
 #include <core/common/BasicTypes.h>
 #include <qt_interop/FPSControls.h>
 
-#include "gl_state.h"
+#include "single_moving_camera_gl_state.h"
 #include "static_multi_camera_gl_state.h"
 
 class RegularGridFusionPipeline;
@@ -39,8 +39,8 @@ class MainWidget : public QOpenGLWidget {
   void SetPipeline(RegularGridFusionPipeline* pipeline);
   void SetPipeline(StaticMultiCameraPipeline* pipeline);
 
-  GLState* GetSingleCameraGLState() const;
-  StaticMultiCameraGLState* GetSMCGLState() const;
+  SingleMovingCameraGLState* GetSingleMovingCameraGLState() const;
+  StaticMultiCameraGLState* GetStaticMultiCameraGLState() const;
 
  protected:
   virtual void initializeGL();
@@ -55,11 +55,11 @@ class MainWidget : public QOpenGLWidget {
 
  private:
 
-  RegularGridFusionPipeline* pipeline_ = nullptr;
-  std::unique_ptr<GLState> gl_state_ = nullptr;
+  RegularGridFusionPipeline* moving_pipeline_ = nullptr;
+  std::unique_ptr<SingleMovingCameraGLState> moving_gl_state_ = nullptr;
 
-  StaticMultiCameraPipeline* smc_pipeline_ = nullptr;
-  std::unique_ptr<StaticMultiCameraGLState> smc_gl_state_ = nullptr;
+  StaticMultiCameraPipeline* static_pipeline_ = nullptr;
+  std::unique_ptr<StaticMultiCameraGLState> static_gl_state_ = nullptr;
 
   FPSControls fps_controls_;
   PerspectiveCamera free_camera_;

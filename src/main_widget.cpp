@@ -15,7 +15,7 @@
 
 #include <GL/glew.h>
 
-#include <core/common/Array2DView.h>
+#include <core/common/ArrayView.h>
 #include <core/common/ArrayUtils.h>
 #include <core/geometry/RectangleUtils.h>
 #include <core/imageproc/ColorMap.h>
@@ -63,19 +63,19 @@ MainWidget::MainWidget(QWidget* parent) :
 }
 
 void MainWidget::SetPipeline(RegularGridFusionPipeline* pipeline) {
-  pipeline_ = pipeline;
+  moving_pipeline_ = pipeline;
 }
 
 void MainWidget::SetPipeline(StaticMultiCameraPipeline* pipeline) {
-  smc_pipeline_ = pipeline;
+  static_pipeline_ = pipeline;
 }
 
-GLState* MainWidget::GetSingleCameraGLState() const {
-  return gl_state_.get();
+SingleMovingCameraGLState* MainWidget::GetSingleMovingCameraGLState() const {
+  return moving_gl_state_.get();
 }
 
-StaticMultiCameraGLState* MainWidget::GetSMCGLState() const {
-  return smc_gl_state_.get();
+StaticMultiCameraGLState* MainWidget::GetStaticMultiCameraGLState() const {
+  return static_gl_state_.get();
 }
 
 void MainWidget::initializeGL() {
@@ -95,13 +95,14 @@ void MainWidget::initializeGL() {
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glBlendEquation(GL_FUNC_ADD);
 
-  if (pipeline_ != nullptr) {
-    gl_state_ = std::make_unique<GLState>(pipeline_, this);
+  if (moving_pipeline_ != nullptr) {
+    moving_gl_state_ = std::make_unique<SingleMovingCameraGLState>(
+      moving_pipeline_, this);
   }
 
-  if (smc_pipeline_ != nullptr) {
-    smc_gl_state_ = std::make_unique<StaticMultiCameraGLState>(
-      smc_pipeline_, this);
+  if (static_pipeline_ != nullptr) {
+    static_gl_state_ = std::make_unique<StaticMultiCameraGLState>(
+      static_pipeline_, this);
   }
 }
 
@@ -113,12 +114,12 @@ void MainWidget::keyPressEvent(QKeyEvent* e) {
 void MainWidget::paintGL() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (smc_gl_state_ != nullptr) {
-      smc_gl_state_->Render(free_camera_);
+    if (static_gl_state_ != nullptr) {
+      static_gl_state_->Render(free_camera_);
     }
 
-    if (gl_state_ != nullptr) {
-      gl_state_->Render(free_camera_);
+    if (moving_gl_state_ != nullptr) {
+      moving_gl_state_->Render(free_camera_);
     }
 }
 
@@ -129,12 +130,12 @@ void MainWidget::resizeGL(int w, int h) {
     free_camera_.setFrustum(GLFrustum::makeSymmetricPerspective(
       kFreeCameraFovYRadians, aspectRatio, kFreeCameraZNear, kFreeCameraZFar));
 
-    if (gl_state_ != nullptr) {
-      gl_state_->Resize({w, h});
+    if (static_gl_state_ != nullptr) {
+      static_gl_state_->Resize({w, h});
     }
 
-    if(smc_gl_state_ != nullptr) {
-      smc_gl_state_->Resize({w, h});
+    if(moving_gl_state_ != nullptr) {
+      moving_gl_state_->Resize({w, h});
     }
 
     update();
