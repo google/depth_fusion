@@ -527,7 +527,7 @@ void PolygonalizeCell(Vector3f grid_positions[8], Vector3f grid_normals[8],
 
 // TODO(jiawen): do a version without normals
 // TODO(jiawen): cull voxels with weight < eps.
-void MarchingCubes(Array3DView<const TSDF> grid, float max_tsdf_value,
+void MarchingCubes(const Array3D<TSDF> grid, float max_tsdf_value,
   const SimilarityTransform& world_from_grid,
   vector<Vector3f>& positions_list_out,
   vector<Vector3f>& normals_list_out) {

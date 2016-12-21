@@ -14,10 +14,13 @@
 #include "static_multi_camera_pipeline.h"
 
 #include <core/common/ArrayUtils.h>
+#include <gflags/gflags.h>
 
 using libcgt::core::arrayutils::cast;
 using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::SimilarityTransform;
+
+DEFINE_int32(only_process_mesh, -1, "Only process i-th mesh.");
 
 StaticMultiCameraPipeline::StaticMultiCameraPipeline(
   const std::vector<RGBDCameraParameters>& camera_params,
@@ -31,13 +34,16 @@ StaticMultiCameraPipeline::StaticMultiCameraPipeline(
   depth_camera_poses_cfw_(depth_camera_poses_cfw),
 
   depth_processor_(camera_params[0].depth.intrinsics,
-                   camera_params[0].depth.depth_range) {
+                   camera_params[0].depth.depth_range),
+  depth_meters_(camera_params.size()),
+  depth_camera_undistort_maps_(camera_params.size()),
+  undistorted_depth_meters_(camera_params.size()) {
+
 
   for (size_t i = 0; i < camera_params.size(); ++i) {
-    depth_meters_.emplace_back(camera_params[i].depth.resolution);
-    depth_camera_undistort_maps_.emplace_back(
-      camera_params[i].depth.resolution);
-    undistorted_depth_meters_.emplace_back(camera_params[i].depth.resolution);
+    depth_meters_[i] = DeviceArray2D<float>(camera_params[i].depth.resolution);
+    depth_camera_undistort_maps_[i] = DeviceArray2D<float2>(camera_params[i].depth.resolution);
+    undistorted_depth_meters_[i] = DeviceArray2D<float>(camera_params[i].depth.resolution);
     input_buffers_.emplace_back(camera_params[i].color.resolution,
                                 camera_params[i].depth.resolution);
 
@@ -106,6 +112,7 @@ void StaticMultiCameraPipeline::Fuse() {
   // TODO: instead of N sweeps over the volume, for each voxel, can sweep
   // over cameras instead.
   for (size_t i = 0; i < depth_meters_.size(); ++i) {
+    if (i != FLAGS_only_process_mesh && FLAGS_only_process_mesh != -1) continue;
     Vector4f flpp = {
       camera_params_[i].depth.intrinsics.focalLength,
       camera_params_[i].depth.intrinsics.principalPoint
@@ -136,6 +143,8 @@ TriangleMesh StaticMultiCameraPipeline::Triangulate(
   const Matrix4f& output_from_world) const {
   TriangleMesh mesh = regular_grid_.Triangulate();
 
+  printf("Output mesh: %lu vertices and %lu normals.\n", mesh.positions().size(),
+         mesh.normals().size());
   for (Vector3f& v : mesh.positions()) {
     v = output_from_world.transformPoint(v);
   }

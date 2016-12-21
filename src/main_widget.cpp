@@ -96,13 +96,13 @@ void MainWidget::initializeGL() {
   glBlendEquation(GL_FUNC_ADD);
 
   if (moving_pipeline_ != nullptr) {
-    moving_gl_state_ = std::make_unique<SingleMovingCameraGLState>(
-      moving_pipeline_, this);
+    moving_gl_state_ = std::unique_ptr<SingleMovingCameraGLState>(
+        new SingleMovingCameraGLState(moving_pipeline_, this));
   }
 
   if (static_pipeline_ != nullptr) {
-    static_gl_state_ = std::make_unique<StaticMultiCameraGLState>(
-      static_pipeline_, this);
+    static_gl_state_ = std::unique_ptr<StaticMultiCameraGLState>(
+        new StaticMultiCameraGLState(static_pipeline_, this));
   }
 }
 

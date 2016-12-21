@@ -20,7 +20,9 @@
 #include <core/common/Array2D.h>
 #include <core/common/BasicTypes.h>
 #include <camera_wrappers/RGBDStream.h>
+#ifdef USE_OPENNI2
 #include <camera_wrappers/OpenNI2/OpenNI2Camera.h>
+#endif
 
 // TODO(jiawen): Figure out a way to forward declare RGBDInputStream.
 
@@ -54,17 +56,18 @@ public:
   void read(InputBuffer* buffer, bool* rgb_updated, bool* depth_updated);
 
 private:
-
-  using OpenNI2Camera = libcgt::camera_wrappers::openni2::OpenNI2Camera;
   using RGBDInputStream = libcgt::camera_wrappers::RGBDInputStream;
   using StreamMetadata = libcgt::camera_wrappers::StreamMetadata;
 
   InputType input_type_;
 
+#if USE_OPENNI2
+  using OpenNI2Camera = libcgt::camera_wrappers::openni2::OpenNI2Camera;
   std::unique_ptr<OpenNI2Camera> openni2_camera_;
   Array2D<uint8x3> openni2_buffer_rgb_;
   Array2D<uint16_t> openni2_buffer_depth_;
   OpenNI2Camera::FrameView openni2_frame_;
+#endif
 
   std::unique_ptr<RGBDInputStream> file_input_stream_;
 

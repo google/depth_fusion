@@ -15,7 +15,6 @@
 
 #include <cassert>
 
-#include <camera_wrappers/Kinect1x/KinectUtils.h>
 #include <camera_wrappers/PixelFormat.h>
 #include <core/common/ArrayUtils.h>
 #include <core/imageproc/ColorMap.h>
@@ -25,14 +24,43 @@
 
 using libcgt::camera_wrappers::PixelFormat;
 using libcgt::camera_wrappers::RGBDInputStream;
-using libcgt::camera_wrappers::kinect1x::rawDepthMapToMeters;
 using libcgt::core::arrayutils::copy;
 using libcgt::core::arrayutils::flipY;
 using libcgt::core::imageproc::linearRemapToLuminance;
 using libcgt::core::imageproc::RGBToBGR;
 
+// Function borrowed from libcgt::camera_wrappers::kinect1x.
+// Reproduced here to avoid dependency when not using OpenNI.
+void rawDepthMapToMeters( Array2DReadView< uint16_t > rawDepth,
+    Array2DWriteView< float > outputMeters, bool flipX = true, bool flipY = true,
+    int rightShift = 0)
+{
+    int w = static_cast< int >( rawDepth.width() );
+    int h = static_cast< int >( rawDepth.height() );
+    Array2DReadView< uint16_t > src = rawDepth;
+
+    if (flipX) {
+        src = libcgt::core::arrayutils::flipX( src );
+    }
+    if (flipY) {
+        src = libcgt::core::arrayutils::flipY( src );
+    }
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            uint16_t d = src[{x, y}];
+            d >>= rightShift;
+
+            float z = 0.001f * d;
+            outputMeters[ { x, y } ] = z;
+        }
+    }
+}
+
+
 RgbdInput::RgbdInput(InputType input_type, const char* filename) :
   input_type_(input_type) {
+#if USE_OPENNI2
   if (input_type == InputType::OPENNI2) {
     std::vector<libcgt::camera_wrappers::StreamConfig> config;
     config.emplace_back(
@@ -45,14 +73,16 @@ RgbdInput::RgbdInput(InputType input_type, const char* filename) :
       Vector2i{ 640, 480 }, PixelFormat::DEPTH_MM_U16, 30,
       false
     );
-    openni2_camera_ = std::make_unique<OpenNI2Camera>(config);
+    openni2_camera_ = std::unique_ptr<OpenNI2Camera>(new OpenNI2Camera(config));
     openni2_buffer_rgb_.resize(openni2_camera_->colorConfig().resolution);
     openni2_buffer_depth_.resize(openni2_camera_->depthConfig().resolution);
     openni2_frame_.color = openni2_buffer_rgb_.writeView();
     openni2_frame_.depth = openni2_buffer_depth_.writeView();
     openni2_camera_->start();
-  } else if (input_type == InputType::FILE) {
-    file_input_stream_ = std::make_unique<RGBDInputStream>(filename);
+  } else
+#endif 
+  if (input_type == InputType::FILE) {
+    file_input_stream_ = std::unique_ptr<RGBDInputStream>(new RGBDInputStream(filename));
 
     // Find the rgb stream.
     // TODO: take a dependency on cpp11-range
@@ -100,6 +130,7 @@ void RgbdInput::read(InputBuffer* buffer,
   *rgb_updated = false;
   *depth_updated = false;
 
+#if USE_OPENNI2
   if (input_type_ == InputType::OPENNI2) {
     // TODO: if closed, return false
 
@@ -122,7 +153,10 @@ void RgbdInput::read(InputBuffer* buffer,
       *depth_updated = openni2_frame_.depthUpdated;
     }
 
-  } else if(input_type_ == InputType::FILE) {
+  } else
+#endif
+  if(input_type_ == InputType::FILE) {
+
     uint32_t stream_id;
     int64_t timestamp_ns;
     int32_t frame_index;
@@ -140,19 +174,20 @@ void RgbdInput::read(InputBuffer* buffer,
         bool succeeded = copy(src_rgb, flipY(buffer->color_rgb.writeView()));
 
         *rgb_updated = succeeded;
-      } else if (stream_id == raw_depth_stream_id_ ) {
+      } else if (stream_id == raw_depth_stream_id_) {
+
         buffer->depth_timestamp_ns = timestamp_ns;
         buffer->depth_frame_index = frame_index;
 
         if (depth_metadata_.format == PixelFormat::DEPTH_MM_U16) {
           Array2DReadView<uint16_t> src_depth(src.pointer(),
-            depth_metadata_.size);
+                                              depth_metadata_.size);
           rawDepthMapToMeters(src_depth, buffer->depth_meters,
             false);
           *depth_updated = true;
         } else if(depth_metadata_.format == PixelFormat::DEPTH_M_F32) {
           Array2DReadView<float> src_depth(src.pointer(),
-            depth_metadata_.size);
+                                           depth_metadata_.size);
           bool succeeded = copy(src_depth, buffer->depth_meters.writeView());
           *depth_updated = succeeded;
         }

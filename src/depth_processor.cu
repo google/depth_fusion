@@ -144,14 +144,14 @@ void DepthProcessor::Undistort(DeviceArray2D<float>& raw_depth,
   cudaTextureDesc point_normalized_tex_desc = {};
   point_normalized_tex_desc.addressMode[0] = cudaAddressModeClamp;
   point_normalized_tex_desc.addressMode[1] = cudaAddressModeClamp;
-  point_normalized_tex_desc.filterMode = cudaFilterModePoint;
+  point_normalized_tex_desc.filterMode = cudaFilterModeLinear;
   point_normalized_tex_desc.readMode = cudaReadModeElementType;
   point_normalized_tex_desc.normalizedCoords = true;
 
   cudaTextureDesc point_unnormalized_tex_desc = {};
   point_unnormalized_tex_desc.addressMode[0] = cudaAddressModeClamp;
   point_unnormalized_tex_desc.addressMode[1] = cudaAddressModeClamp;
-  point_unnormalized_tex_desc.filterMode = cudaFilterModePoint;
+  point_unnormalized_tex_desc.filterMode = cudaFilterModeLinear;
   point_unnormalized_tex_desc.readMode = cudaReadModeElementType;
   point_unnormalized_tex_desc.normalizedCoords = false;
 

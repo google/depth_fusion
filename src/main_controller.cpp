@@ -21,7 +21,9 @@
 #include "main_widget.h"
 #include "rgbd_input.h"
 
-#define USE_SINGLE_MOVING_CAMERA 1
+#include "gflags/gflags.h"
+
+DECLARE_bool(run_multi_cam);
 
 MainController::MainController(
   RgbdInput* input, RegularGridFusionPipeline* pipeline,
@@ -53,33 +55,24 @@ MainController::MainController(
 
 void MainController::OnReadInput()
 {
-#if USE_SINGLE_MOVING_CAMERA
-  bool color_updated;
-  bool depth_updated;
-  input_->read(&(pipeline_->GetInputBuffer()), &color_updated, &depth_updated);
-  pipeline_->NotifyInputUpdated(color_updated, depth_updated);
+  bool color_updated, depth_updated;
+  if (!FLAGS_run_multi_cam) {
+    input_->read(&(pipeline_->GetInputBuffer()), &color_updated, &depth_updated);
+    pipeline_->NotifyInputUpdated(color_updated, depth_updated);
+  } else {
+    smc_pipeline_->Reset();
 
-#else
-  for (size_t i = 0; i < inputs_.size(); ++i) {
-    bool rgb_updated;
-    bool depth_updated;
-    inputs_[i].read(&(smc_pipeline_->GetInputBuffer(i)),
-      &rgb_updated, &depth_updated);
-    smc_pipeline_->NotifyInputUpdated(i, rgb_updated, depth_updated);
-  }
+    for (size_t i = 0; i < inputs_.size(); ++i) {
+      inputs_[i].read(&(smc_pipeline_->GetInputBuffer(i)),
+        &color_updated, &depth_updated);
+      smc_pipeline_->NotifyInputUpdated(i, color_updated, depth_updated);
+    }
 
-  //if(depth_updated) {
-  {
     // TODO: pipeline should emit that TSDF has changed.
     smc_pipeline_->Fuse();
-    main_widget_->GetSMCGLState()->NotifyTSDFUpdated();
-  }
-
-  //if(rgb_updated || depth_updated) {
-  {
+    main_widget_->GetStaticMultiCameraGLState()->NotifyTSDFUpdated();
     main_widget_->update();
   }
-#endif
 }
 
 void MainController::OnPauseClicked() {

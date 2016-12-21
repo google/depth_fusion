@@ -23,7 +23,9 @@
 #include <core/vecmath/EuclideanTransform.h>
 #include <cuda/DeviceArray2D.h>
 
+#ifdef USE_ARTOOLKIT
 #include "artoolkit_pose_estimator.h"
+#endif
 #include "regular_grid_tsdf.h"
 #include "rgbd_camera_parameters.h"
 #include "depth_processor.h"
@@ -132,7 +134,10 @@ class RegularGridFusionPipeline : public QObject {
   const int kMaxSuccessiveFailuresBeforeReset = 1000;
   int num_successive_failures_ = 0;
   ProjectivePointPlaneICP icp_;
+
+#ifdef USE_ARTOOLKIT
   ARToolkitPoseEstimator color_pose_estimator_;
+#endif
 
   const PoseFrame initial_pose_;
 

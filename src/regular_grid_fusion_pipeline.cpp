@@ -53,10 +53,11 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   initial_pose_(initial_pose),
 
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
-       camera_params.depth.depth_range),
-
+       camera_params.depth.depth_range)
   // TODO: pass in a PoseEstimator object.
-  color_pose_estimator_(camera_params.color, "../res/cube_64mm.dat")
+#ifdef USE_ARTOOLKIT
+  ,color_pose_estimator_(camera_params.color, "../res/cube_64mm.dat")
+#endif
 {
   assert(initial_pose.method == PoseFrame::EstimationMethod::FIXED_INITIAL);
 }
@@ -206,6 +207,7 @@ bool RegularGridFusionPipeline::UpdatePoseWithICP() {
 }
 
 bool RegularGridFusionPipeline::UpdatePoseWithColorCamera() {
+#ifdef USE_ARTOOLKIT
   ARToolkitPoseEstimator::Result result =
     color_pose_estimator_.EstimatePose(input_buffer_.color_bgr_ydown);
   if (result.valid) {
@@ -222,6 +224,9 @@ bool RegularGridFusionPipeline::UpdatePoseWithColorCamera() {
   }
 
   return result.valid;
+#else
+  return false;
+#endif
 }
 
 // TODO: use distortion model.

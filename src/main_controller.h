@@ -19,11 +19,11 @@
 
 #include "regular_grid_fusion_pipeline.h"
 #include "static_multi_camera_pipeline.h"
+#include "rgbd_input.h"
 
 class ControlWidget;
 class MainWidget;
 class QTimer;
-class RgbdInput;
 
 class MainController : public QObject {
 

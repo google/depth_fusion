@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <cstdio>
+#include <string>
 
 #include <QApplication>
 
 #include <camera_wrappers/StreamConfig.h>
 #include <core/vecmath/EuclideanTransform.h>
 #include <core/vecmath/SimilarityTransform.h>
+#include <core/vecmath/Quat4f.h>
+#include <io/NumberedFilenameBuilder.h>
+#include <opencv_interop/Calib3d.h>
+#include <opencv_interop/VecmathUtils.h>
+#include <gflags/gflags.h>
 
 #include "control_widget.h"
 #include "input_buffer.h"
@@ -27,14 +33,41 @@
 #include "rgbd_camera_parameters.h"
 #include "rgbd_input.h"
 
+using libcgt::opencv_interop::cameraMatrixCVToGL;
+using libcgt::opencv_interop::cameraMatrixToIntrinsics;
+using libcgt::opencv_interop::makeCameraMatrix;
+using libcgt::opencv_interop::undistortRectifyMap;
+using libcgt::opencv_interop::toCVSize;
 using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::SimilarityTransform;
+using std::string;
 
-#define RUN_MULTI_CAM 0
-#define MULTI_CAM_GUI 0
+DEFINE_bool(multi_cam_gui, false,
+            "If true, run multi-camera GUI app.");
+DEFINE_bool(run_multi_cam, true,
+            "If true, use the multi-camera static pipeline.");
+
+DEFINE_double(max_tsdf_value_scale, 32.0,
+              "Maximum TSDF value used in the voxel grid. "
+              "The value is measured in multiples of voxel side lengths.");
+
+DEFINE_string(output_mesh_sequence_prefix, 
+  "/usr/local/google/home/rmbrualla/projects/depth_fusion/data/dan6/frame_",
+  "Output location of meshes when using non-gui mode.");
+
+DEFINE_string(output_mesh_sequence_suffix, 
+  "",
+  "Output location of meshes when using non-gui mode.");
+
+
+DEFINE_int32(process_only_frame, -1,
+             "If different than -1, process only the i-th frame.");
+DEFINE_int32(grid_resolution, 512,
+             "Resolution of voxel grid used for fusion.");
+DEFINE_double(grid_side_length, 2.0f,
+              "Side length of the regular grid used for fusion.");
 
 int SingleMovingCameraMain(int argc, char* argv[]) {
-
   // TODO: use gflags
   if (argc < 3) {
     printf("Usage: %s <calibration_dir> <rgbd_file>\n", argv[0]);
@@ -45,7 +78,7 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
 
   // TODO: switch these to use gflags.
   RGBDCameraParameters camera_params =
-	  LoadRGBDCameraParameters(argv[1]);
+      LoadRGBDCameraParameters(argv[1]);
 
   std::string rgbd_stream_filename = argv[2];
 
@@ -105,16 +138,6 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
   return app.exec();
 }
 
-#include <core/vecmath/Quat4f.h>
-
-#include <opencv_interop/Calib3d.h>
-#include <opencv_interop/VecmathUtils.h>
-
-using libcgt::opencv_interop::cameraMatrixCVToGL;
-using libcgt::opencv_interop::cameraMatrixToIntrinsics;
-using libcgt::opencv_interop::makeCameraMatrix;
-using libcgt::opencv_interop::undistortRectifyMap;
-using libcgt::opencv_interop::toCVSize;
 
 // HACK: this only makes a depth camera.
 RGBDCameraParameters makeRGBDCameraParameters(double focalLength,
@@ -164,25 +187,22 @@ SimilarityTransform MakeWorldFromGrid(const Vector3f& center,
   return t1;
 }
 
-#include <io/NumberedFilenameBuilder.h>
-
 int StaticMultiCameraMain(int argc, char* argv[]) {
   QApplication app(argc, argv);
 
   std::vector<std::string> rgbd_stream_filenames = {
-    "C:/tmp/multicam/kinect0083_new/filtered_frames.rgbd",
-    "C:/tmp/multicam/kinect0134_new/filtered_frames.rgbd",
-    "C:/tmp/multicam/kinect0142_new/filtered_frames.rgbd"
-  };
+    "/usr/local/google/home/rmbrualla/projects/depth_fusion/data/dan6/kinect0083_new/filtered_frames.rgbd",
+    "/usr/local/google/home/rmbrualla/projects/depth_fusion/data/dan6/kinect0134_new/filtered_frames.rgbd",
+    "/usr/local/google/home/rmbrualla/projects/depth_fusion/data/dan6/kinect0142_new/filtered_frames.rgbd"};
 
   const int kNumCameras = 3;
-  std::vector<RGBDCameraParameters> camera_params;
-  camera_params.push_back(makeRGBDCameraParameters(365.183, 255.097, 207.695,
-    0.0745901, -0.189055));
-  camera_params.push_back(makeRGBDCameraParameters(366.009, 251.421, 205.132,
-    0.0641811, -0.179726));
-  camera_params.push_back(makeRGBDCameraParameters(365.712, 254.596, 205.857,
-    0.0678888, -0.185925));
+  std::vector<RGBDCameraParameters> camera_params(3);
+  camera_params[0] = makeRGBDCameraParameters(365.183, 255.097, 207.695,
+    0.0745901, -0.189055);
+  camera_params[1] = makeRGBDCameraParameters(366.009, 251.421, 205.132,
+    0.0641811, -0.179726);
+  camera_params[2] = makeRGBDCameraParameters(365.712, 254.596, 205.857,
+    0.0678888, -0.185925);
 
   std::vector<EuclideanTransform> camera_poses(3);
   camera_poses[0].translation = Vector3f{-0.015828f, 0.014736f, -0.0128686f};
@@ -228,87 +248,95 @@ int StaticMultiCameraMain(int argc, char* argv[]) {
   Vector4f p0 = center_camera.worldFromScreen(xy0,
     z0, camera_params[1].depth.resolution);
 
-  constexpr int kRegularGridResolution = 512;
-  constexpr float kRegularGridSideLength = 2.0f;
-  constexpr float kVoxelSize = kRegularGridSideLength / kRegularGridResolution;
-  constexpr float kMaxTSDFValue = 32 * kVoxelSize;
+  const int kRegularGridResolution = FLAGS_grid_resolution;
+  const float kRegularGridSideLength = FLAGS_grid_side_length;
+  const float kVoxelSize = kRegularGridSideLength / kRegularGridResolution;
+  const float kMaxTSDFValue = FLAGS_max_tsdf_value_scale * kVoxelSize;
   const SimilarityTransform initial_world_from_grid =
     MakeWorldFromGrid(p0.xyz, kRegularGridSideLength, kRegularGridResolution);
 
   StaticMultiCameraPipeline pipeline(camera_params, camera_poses,
                                      Vector3i{kRegularGridResolution},
                                      initial_world_from_grid, kMaxTSDFValue);
-#if MULTI_CAM_GUI
-  ControlWidget control_widget;
-  control_widget.setGeometry(50, 50, 150, 150);
-  control_widget.show();
+  if (FLAGS_multi_cam_gui) {
+    ControlWidget control_widget;
+    control_widget.setGeometry(50, 50, 150, 150);
+    control_widget.show();
 
-  MainWidget main_widget;
-  main_widget.SetPipeline(&pipeline);
+    MainWidget main_widget;
+    main_widget.SetPipeline(&pipeline);
 
-  const int window_width = 1920;
-  const int window_height = 1200;
-  int x = control_widget.frameGeometry().right();
-  int y = control_widget.frameGeometry().top();
-  main_widget.move(x, y);
-  main_widget.resize(window_width, window_height);
-  main_widget.show();
+    const int window_width = 1920;
+    const int window_height = 1200;
+    int x = control_widget.frameGeometry().right();
+    int y = control_widget.frameGeometry().top();
+    main_widget.move(x, y);
+    main_widget.resize(window_width, window_height);
+    main_widget.show();
 
-  // HACK:
-  // GUI version, non-gui version
-  MainController controller(nullptr, nullptr,
-                            &control_widget, &main_widget);
-  for(size_t i = 0; i < rgbd_stream_filenames.size(); ++i) {
-    controller.inputs_.emplace_back(RgbdInput::InputType::FILE,
-                                    rgbd_stream_filenames[i].c_str());
-  }
-  controller.smc_pipeline_ = &pipeline;
-  return app.exec();
+    // HACK:
+    // GUI version, non-gui version
+    MainController controller(nullptr, nullptr,
+                              &control_widget, &main_widget);
+    for(size_t i = 0; i < rgbd_stream_filenames.size(); ++i) {
+      controller.inputs_.emplace_back(RgbdInput::InputType::FILE,
+          rgbd_stream_filenames[i].c_str());
+    }
+    controller.smc_pipeline_ = &pipeline;
+    return app.exec();
+  } else {
+    // Run as command line tool.
+    std::vector<RgbdInput> inputs;
+    for(size_t i = 0; i < rgbd_stream_filenames.size(); ++i) {
+      inputs.emplace_back(RgbdInput::InputType::FILE,
+        rgbd_stream_filenames[i].c_str());
+    }
 
-#else
+    NumberedFilenameBuilder nfb(FLAGS_output_mesh_sequence_prefix,
+                                FLAGS_output_mesh_sequence_suffix + ".obj");
 
-  std::vector<RgbdInput> inputs;
-  for(size_t i = 0; i < rgbd_stream_filenames.size(); ++i) {
-    inputs.emplace_back(RgbdInput::InputType::FILE,
-      rgbd_stream_filenames[i].c_str());
-  }
-
-  NumberedFilenameBuilder nfb("c:/tmp/multicam/meshes/frame_", ".obj");
-
-  int frame_index = 0;
-  while (true) {
-    bool rgb_updated;
-    bool depth_updated;
-    for(size_t i = 0; i < inputs.size(); ++i) {
-      printf("Processing frame %zu of %zu\n", i, inputs.size());
+    int frame_index = 0;
+    while (true) {
+      bool rgb_updated;
+      bool depth_updated;
       pipeline.Reset();
 
-      inputs[i].read(&pipeline.GetInputBuffer(i),
-        &rgb_updated, &depth_updated);
-      if (!depth_updated) {
+      for(size_t i = 0; i < inputs.size(); ++i) {
+        printf("Processing frame %zu of %zu\n", i, inputs.size());
+
+        inputs[i].read(&pipeline.GetInputBuffer(i),
+          &rgb_updated, &depth_updated);
+        if (!depth_updated) {
+          break;
+        }
+
+        pipeline.NotifyInputUpdated(i, rgb_updated, depth_updated);
+      }
+      // TODO: shouldn't have to call this.
+      if (FLAGS_process_only_frame == frame_index || FLAGS_process_only_frame == -1) {
+        pipeline.Fuse();
+        std::string filename = nfb.filenameForNumber(frame_index);
+        pipeline.Triangulate(rot180.asMatrix()).saveOBJ(filename);
+        if (FLAGS_process_only_frame == frame_index) return 0;
+      }
+      ++frame_index;
+      if (frame_index > 1799) {
         break;
       }
-
-      pipeline.NotifyInputUpdated(i, rgb_updated, depth_updated);
     }
-    // TODO: shouldn't have to call this.
-    pipeline.Fuse();
-    pipeline.Triangulate(rot180.asMatrix()).saveOBJ(
-    nfb.filenameForNumber(frame_index));
-    ++frame_index;
-    if (frame_index > 1799) {
-      break;
-    }
-  }
 
   return 0;
-#endif
+  }
 }
 
 int main(int argc, char* argv[]) {
-#if RUN_MULTI_CAM
-  return StaticMultiCameraMain(argc, argv);
-#else
-  return SingleMovingCameraMain(argc, argv);
-#endif
+  google::ParseCommandLineFlags(&argc, &argv, true);
+
+  glewInit();
+
+  if (FLAGS_run_multi_cam) {
+    return StaticMultiCameraMain(argc, argv);
+  } else {
+    return SingleMovingCameraMain(argc, argv);
+  }
 }

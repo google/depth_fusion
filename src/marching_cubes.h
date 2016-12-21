@@ -25,7 +25,7 @@
 
 // Run the marching cubes algorithm on the regular grid TSDF.
 // Generates a triangle list of positions and normals.
-void MarchingCubes(Array3DView<const TSDF> grid, float max_tsdf_value,
+void MarchingCubes(const Array3D< TSDF> grid, float max_tsdf_value,
   const libcgt::core::vecmath::SimilarityTransform& world_from_grid,
   std::vector<Vector3f>& triangle_list_positions_out,
   std::vector<Vector3f>& triangle_list_normals_out);
