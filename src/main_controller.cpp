@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "main_controller.h"
 
+#include <gflags/gflags.h>
 #include <QTimer>
 
 #include <camera_wrappers/PoseStream.h>
@@ -21,7 +22,7 @@
 #include "main_widget.h"
 #include "rgbd_input.h"
 
-#define USE_SINGLE_MOVING_CAMERA 1
+DECLARE_string(mode);
 
 MainController::MainController(
   RgbdInput* input, RegularGridFusionPipeline* pipeline,
@@ -51,35 +52,33 @@ MainController::MainController(
   }
 }
 
-void MainController::OnReadInput()
-{
-#if USE_SINGLE_MOVING_CAMERA
-  bool color_updated;
-  bool depth_updated;
-  input_->read(&(pipeline_->GetInputBuffer()), &color_updated, &depth_updated);
-  pipeline_->NotifyInputUpdated(color_updated, depth_updated);
-
-#else
-  for (size_t i = 0; i < inputs_.size(); ++i) {
-    bool rgb_updated;
+void MainController::OnReadInput() {
+  if (FLAGS_mode == "single_moving") {
+    bool color_updated;
     bool depth_updated;
-    inputs_[i].read(&(smc_pipeline_->GetInputBuffer(i)),
-      &rgb_updated, &depth_updated);
-    smc_pipeline_->NotifyInputUpdated(i, rgb_updated, depth_updated);
-  }
+    input_->read(&(pipeline_->GetInputBuffer()), &color_updated, &depth_updated);
+    pipeline_->NotifyInputUpdated(color_updated, depth_updated);
+  } else if (FLAGS_mode == "multi_static") {
+    for (size_t i = 0; i < inputs_.size(); ++i) {
+      bool rgb_updated;
+      bool depth_updated;
+      inputs_[i].read(&(smc_pipeline_->GetInputBuffer(i)),
+        &rgb_updated, &depth_updated);
+      smc_pipeline_->NotifyInputUpdated(i, rgb_updated, depth_updated);
+    }
 
-  //if(depth_updated) {
-  {
-    // TODO: pipeline should emit that TSDF has changed.
-    smc_pipeline_->Fuse();
-    main_widget_->GetSMCGLState()->NotifyTSDFUpdated();
-  }
+    //if(depth_updated) {
+    {
+      // TODO: pipeline should emit that TSDF has changed.
+      smc_pipeline_->Fuse();
+      main_widget_->GetStaticMultiCameraGLState()->NotifyTSDFUpdated();
+    }
 
-  //if(rgb_updated || depth_updated) {
-  {
-    main_widget_->update();
+    //if(rgb_updated || depth_updated) {
+    {
+      main_widget_->update();
+    }
   }
-#endif
 }
 
 void MainController::OnPauseClicked() {
@@ -100,20 +99,20 @@ void MainController::OnResetClicked() {
 }
 
 void MainController::OnSaveMeshClicked(QString filename) {
-  // HACK:
-#if USE_SINGLE_MOVING_CAMERA
-  TriangleMesh mesh = pipeline_->Triangulate();
-  bool save_succeeded = mesh.saveOBJ(filename.toStdString().c_str());
-#else
-  // HACK: rot180
-  Matrix4f rot180 = Matrix4f::rotateX(static_cast<float>(M_PI));
-  TriangleMesh mesh = smc_pipeline_->Triangulate(rot180);
-  bool save_succeeded = mesh.saveOBJ(filename.toStdString().c_str());
-#endif
-// TODO: messagebox for success
+  if (FLAGS_mode == "single_moving") {
+    TriangleMesh mesh = pipeline_->Triangulate();
+    bool save_succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+  } else if (FLAGS_mode == "multi_static") {
+    // HACK: rot180
+    Matrix4f rot180 = Matrix4f::rotateX(static_cast<float>(M_PI));
+    TriangleMesh mesh = smc_pipeline_->Triangulate(rot180);
+    bool save_succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+  }
+  // TODO: messagebox for success
 }
 
 void SavePoses(QString filename, const std::vector<PoseFrame> poses) {
+  // TODO: implement me.
 #if 0
   libcgt::camera_wrappers::PoseStreamMetadata metadata;
   metadata.direction = libcgt::camera_wrappers::PoseStreamTransformDirection::CAMERA_FROM_WORLD;

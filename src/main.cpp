@@ -13,6 +13,7 @@
 // limitations under the License.
 #include <cstdio>
 
+#include <gflags/gflags.h>
 #include <QApplication>
 
 #include <camera_wrappers/StreamConfig.h>
@@ -30,24 +31,51 @@
 using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::SimilarityTransform;
 
-#define RUN_MULTI_CAM 0
-#define MULTI_CAM_GUI 0
+DEFINE_string(mode, "single_moving",
+  "Mode to run the app in. Either \"single_moving\" or \"multi_static\"." );
+DEFINE_string(sm_calibration_dir, "",
+  "REQUIRED for single moving mode: "
+  "calibration directory for the RGBD camera.");
+DEFINE_string(sm_input_type, "openni2",
+  "REQUIRED for single moving mode: "
+  "data source. Either \"openni2\" for the currently connected OpenNI2 "
+  "camera, or a \"file\", in which case sm_input_args should specify the path "
+  "to a .rgbd file.");
+DEFINE_string(sm_input_args, "",
+  "OPTIONAL for single moving mode: "
+  "If sm_input_type is \"file\", the path to a .rgbd file.");
+
+DEFINE_bool(ms_use_gui, true,
+  "Set true to visualize with GUI, false to run in batch mode.");
 
 int SingleMovingCameraMain(int argc, char* argv[]) {
 
-  // TODO: use gflags
-  if (argc < 3) {
-    printf("Usage: %s <calibration_dir> <rgbd_file>\n", argv[0]);
+  if (FLAGS_sm_calibration_dir == "") {
+    printf("sm_calibration_dir is required.\n");
     return 1;
+  }
+
+  RgbdInput::InputType input_type;
+  if (FLAGS_sm_input_type == "openni2") {
+    input_type = RgbdInput::InputType::OPENNI2;
+  } else if( FLAGS_sm_input_type == "file" ) {
+    input_type = RgbdInput::InputType::FILE;
+  } else {
+    printf("sm_input_type must be \"openni2\" or \"file\"\n");
+    return 1;
+  }
+
+  if (FLAGS_sm_input_type == "file") {
+    if (FLAGS_sm_input_args == "") {
+      printf("In FILE mode, sm_input_args is required.\n");
+      return 1;
+    }
   }
 
   QApplication app(argc, argv);
 
-  // TODO: switch these to use gflags.
   RGBDCameraParameters camera_params =
-	  LoadRGBDCameraParameters(argv[1]);
-
-  std::string rgbd_stream_filename = argv[2];
+    LoadRGBDCameraParameters(FLAGS_sm_calibration_dir);
 
   const Vector3i kRegularGridResolution(512); // ~2m^3
   const float kRegularGridVoxelSize = 0.004f; // 4 mm.
@@ -67,12 +95,7 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
       )
     );
 
-#if 0
-  RgbdInput rgbd_input(RgbdInput::InputType::FILE,
-                       rgbd_stream_filename.c_str());
-#else
-  RgbdInput rgbd_input(RgbdInput::InputType::OPENNI2, nullptr);
-#endif
+  RgbdInput rgbd_input(input_type, FLAGS_sm_input_args.c_str());
 
   PoseFrame initial_pose_frame = {};
   initial_pose_frame.method = PoseFrame::EstimationMethod::FIXED_INITIAL;
@@ -166,13 +189,13 @@ SimilarityTransform MakeWorldFromGrid(const Vector3f& center,
 
 #include <io/NumberedFilenameBuilder.h>
 
-int StaticMultiCameraMain(int argc, char* argv[]) {
+int MultiStaticCameraMain(int argc, char* argv[]) {
   QApplication app(argc, argv);
 
   std::vector<std::string> rgbd_stream_filenames = {
-    "C:/tmp/multicam/kinect0083_new/filtered_frames.rgbd",
-    "C:/tmp/multicam/kinect0134_new/filtered_frames.rgbd",
-    "C:/tmp/multicam/kinect0142_new/filtered_frames.rgbd"
+    "d:/tmp/multicam/kinect0083_new/filtered_frames.rgbd",
+    "d:/tmp/multicam/kinect0134_new/filtered_frames.rgbd",
+    "d:/tmp/multicam/kinect0142_new/filtered_frames.rgbd"
   };
 
   const int kNumCameras = 3;
@@ -238,77 +261,79 @@ int StaticMultiCameraMain(int argc, char* argv[]) {
   StaticMultiCameraPipeline pipeline(camera_params, camera_poses,
                                      Vector3i{kRegularGridResolution},
                                      initial_world_from_grid, kMaxTSDFValue);
-#if MULTI_CAM_GUI
-  ControlWidget control_widget;
-  control_widget.setGeometry(50, 50, 150, 150);
-  control_widget.show();
+  if (FLAGS_ms_use_gui) {
+    ControlWidget control_widget;
+    control_widget.setGeometry(50, 50, 150, 150);
+    control_widget.show();
 
-  MainWidget main_widget;
-  main_widget.SetPipeline(&pipeline);
+    MainWidget main_widget;
+    main_widget.SetPipeline(&pipeline);
 
-  const int window_width = 1920;
-  const int window_height = 1200;
-  int x = control_widget.frameGeometry().right();
-  int y = control_widget.frameGeometry().top();
-  main_widget.move(x, y);
-  main_widget.resize(window_width, window_height);
-  main_widget.show();
+    const int window_width = 1920;
+    const int window_height = 1200;
+    int x = control_widget.frameGeometry().right();
+    int y = control_widget.frameGeometry().top();
+    main_widget.move(x, y);
+    main_widget.resize(window_width, window_height);
+    main_widget.show();
 
-  // HACK:
-  // GUI version, non-gui version
-  MainController controller(nullptr, nullptr,
-                            &control_widget, &main_widget);
-  for(size_t i = 0; i < rgbd_stream_filenames.size(); ++i) {
-    controller.inputs_.emplace_back(RgbdInput::InputType::FILE,
-                                    rgbd_stream_filenames[i].c_str());
-  }
-  controller.smc_pipeline_ = &pipeline;
-  return app.exec();
+    // HACK:
+    // GUI version, non-gui version
+    MainController controller(nullptr, nullptr,
+                              &control_widget, &main_widget);
+    for(size_t i = 0; i < rgbd_stream_filenames.size(); ++i) {
+      controller.inputs_.emplace_back(RgbdInput::InputType::FILE,
+                                      rgbd_stream_filenames[i].c_str());
+    }
+    controller.smc_pipeline_ = &pipeline;
+    return app.exec();
+  } else {
+    std::vector<RgbdInput> inputs;
+    for(size_t i = 0; i < rgbd_stream_filenames.size(); ++i) {
+      inputs.emplace_back(RgbdInput::InputType::FILE,
+        rgbd_stream_filenames[i].c_str());
+    }
 
-#else
+    NumberedFilenameBuilder nfb("c:/tmp/multicam/meshes/frame_", ".obj");
 
-  std::vector<RgbdInput> inputs;
-  for(size_t i = 0; i < rgbd_stream_filenames.size(); ++i) {
-    inputs.emplace_back(RgbdInput::InputType::FILE,
-      rgbd_stream_filenames[i].c_str());
-  }
+    int frame_index = 0;
+    while (true) {
+      bool rgb_updated;
+      bool depth_updated;
+      for(size_t i = 0; i < inputs.size(); ++i) {
+        printf("Processing frame %zu of %zu\n", i, inputs.size());
+        pipeline.Reset();
 
-  NumberedFilenameBuilder nfb("c:/tmp/multicam/meshes/frame_", ".obj");
+        inputs[i].read(&pipeline.GetInputBuffer(i),
+          &rgb_updated, &depth_updated);
+        if (!depth_updated) {
+          break;
+        }
 
-  int frame_index = 0;
-  while (true) {
-    bool rgb_updated;
-    bool depth_updated;
-    for(size_t i = 0; i < inputs.size(); ++i) {
-      printf("Processing frame %zu of %zu\n", i, inputs.size());
-      pipeline.Reset();
-
-      inputs[i].read(&pipeline.GetInputBuffer(i),
-        &rgb_updated, &depth_updated);
-      if (!depth_updated) {
+        pipeline.NotifyInputUpdated(i, rgb_updated, depth_updated);
+      }
+      // TODO: shouldn't have to call this.
+      pipeline.Fuse();
+      pipeline.Triangulate(rot180.asMatrix()).saveOBJ(
+      nfb.filenameForNumber(frame_index));
+      ++frame_index;
+      if (frame_index > 1799) {
         break;
       }
+    }
 
-      pipeline.NotifyInputUpdated(i, rgb_updated, depth_updated);
-    }
-    // TODO: shouldn't have to call this.
-    pipeline.Fuse();
-    pipeline.Triangulate(rot180.asMatrix()).saveOBJ(
-    nfb.filenameForNumber(frame_index));
-    ++frame_index;
-    if (frame_index > 1799) {
-      break;
-    }
+    return 0;
   }
-
-  return 0;
-#endif
 }
 
 int main(int argc, char* argv[]) {
-#if RUN_MULTI_CAM
-  return StaticMultiCameraMain(argc, argv);
-#else
-  return SingleMovingCameraMain(argc, argv);
-#endif
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  if (FLAGS_mode == "single_moving") {
+    return SingleMovingCameraMain(argc, argv);
+  } else if (FLAGS_mode == "multi_static") {
+    return MultiStaticCameraMain(argc, argv);
+  } else {
+    printf("Invalid mode: %s\n", FLAGS_mode.c_str());
+    return 1;
+  }
 }

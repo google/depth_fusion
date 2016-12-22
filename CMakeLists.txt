@@ -4,6 +4,13 @@ project( depth_fusion )
 set_property( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 	PROPERTY VS_STARTUP_PROJECT depth_fusion)
 
+# gflags
+if( EXISTS "third_party/gflags/CMakeLists.txt" )
+    add_subdirectory( "third_party/gflags" )
+else()
+    find_package( gflags REQUIRED )
+endif()
+
 # OpenCV
 find_package( OpenCV REQUIRED )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
@@ -67,6 +74,7 @@ set_property( TARGET depth_fusion PROPERTY CXX_STANDARD 11 )
 
 # TODO: use import and export library
 target_link_libraries( depth_fusion
+	gflags
 	opengl32 GLEW::GLEW
 	${CUDA_LIBRARIES}
 	Qt5::Core Qt5::OpenGL Qt5::Widgets
