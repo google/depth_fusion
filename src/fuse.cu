@@ -13,9 +13,9 @@
 // limitations under the License.
 #include "fuse.h"
 
-#include <cuda/float4x4.h>
-#include <cuda/MathUtils.h>
-#include <cuda/ThreadMath.cuh>
+#include "libcgt/cuda/float4x4.h"
+#include "libcgt/cuda/MathUtils.h"
+#include "libcgt/cuda/ThreadMath.cuh"
 
 #include "camera_math.cuh"
 

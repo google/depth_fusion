@@ -16,9 +16,9 @@
 
 #include <AR/arMulti.h>
 
-#include <core/common/Array2D.h>
-#include <core/common/BasicTypes.h>
-#include <core/vecmath/EuclideanTransform.h>
+#include "libcgt/core/common/Array2D.h"
+#include "libcgt/core/common/BasicTypes.h"
+#include "libcgt/core/vecmath/EuclideanTransform.h"
 
 struct CameraParameters;
 

@@ -21,20 +21,20 @@
 #include <QObject>
 #include <QOpenGLWidget>
 
-#include <core/common/Array2D.h>
+#include "libcgt/core/common/Array2D.h"
 
-#include <cuda/DeviceArray2D.h>
-#include <cuda/gl/Texture2D.h>
+#include "libcgt/cuda/DeviceArray2D.h"
+#include "libcgt/cuda/gl/Texture2D.h"
 
-#include <GL/common/GLProgramPipeline.h>
-#include <GL/common/GLSamplerObject.h>
-#include <GL/common/GLSeparableProgram.h>
-#include <GL/GL_45/GLTexture2D.h>
-#include <GL/GL_45/drawables/Axes.h>
-#include <GL/GL_45/drawables/Frustum.h>
-#include <GL/GL_45/drawables/PointCloud.h>
-#include <GL/GL_45/drawables/TexturedRectangle.h>
-#include <GL/GL_45/drawables/WireframeBox.h>
+#include "libcgt/GL/GLProgramPipeline.h"
+#include "libcgt/GL/GLSamplerObject.h"
+#include "libcgt/GL/GLSeparableProgram.h"
+#include "libcgt/GL/GL_45/GLTexture2D.h"
+#include "libcgt/GL/GL_45/drawables/Axes.h"
+#include "libcgt/GL/GL_45/drawables/Frustum.h"
+#include "libcgt/GL/GL_45/drawables/PointCloud.h"
+#include "libcgt/GL/GL_45/drawables/TexturedRectangle.h"
+#include "libcgt/GL/GL_45/drawables/WireframeBox.h"
 
 #include "pipeline_data_type.h"
 

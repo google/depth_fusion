@@ -16,7 +16,7 @@
 
 #include <cstdint>
 
-#include <core/vecmath/EuclideanTransform.h>
+#include "libcgt/core/vecmath/EuclideanTransform.h"
 
 struct PoseFrame {
 

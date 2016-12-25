@@ -13,11 +13,11 @@
 // limitations under the License.
 #include "depth_processor.h"
 
-#include <cuda/Event.h>
-#include <cuda/MathUtils.h>
-#include <cuda/Rect2i.h>
-#include <cuda/ThreadMath.cuh>
-#include <cuda/VecmathConversions.h>
+#include "libcgt/cuda/Event.h"
+#include "libcgt/cuda/MathUtils.h"
+#include "libcgt/cuda/Rect2i.h"
+#include "libcgt/cuda/ThreadMath.cuh"
+#include "libcgt/cuda/VecmathConversions.h"
 
 #include "camera_math.cuh"
 
@@ -25,7 +25,6 @@ using libcgt::cuda::Event;
 using libcgt::cuda::threadmath::threadSubscript2DGlobal;
 using libcgt::cuda::contains;
 using libcgt::cuda::inset;
-using libcgt::cuda::Rect2i;
 using libcgt::cuda::math::numBins2D;
 
 __global__
@@ -35,7 +34,7 @@ void SmoothDepthMapKernel(KernelArray2D<const float> input,
   float delta_z_squared_threshold,
   KernelArray2D<float> smoothed) {
   int2 xy = threadSubscript2DGlobal();
-  Rect2i valid_rect = inset(Rect2i(input.size()),
+  libcgt::cuda::Rect2i valid_rect = inset(libcgt::cuda::Rect2i(input.size()),
     { kernel_radius, kernel_radius });
   float z = input[xy];
   float smoothed_z = 0.0f;
@@ -75,7 +74,7 @@ void UndistortKernel(cudaTextureObject_t raw_depth,
   cudaTextureObject_t undistort_map,
   KernelArray2D<float> undistorted) {
   int2 xy = threadSubscript2DGlobal();
-  if (contains(Rect2i(undistorted.size()), xy)) {
+  if (contains(libcgt::cuda::Rect2i(undistorted.size()), xy)) {
     // TODO: make a function to go from xy to [0,1]
 
     float u = xy.x + 0.5f;

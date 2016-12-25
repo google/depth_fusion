@@ -13,8 +13,11 @@
 // limitations under the License.
 #include "static_multi_camera_gl_state.h"
 
-#include <core/common/ForND.h>
-#include <core/geometry/RectangleUtils.h>
+#include "libcgt/core/common/ForND.h"
+#include "libcgt/core/geometry/RectangleUtils.h"
+#include "libcgt/core/geometry/RangeUtils.h"
+#include "libcgt/core/vecmath/Vector4f.h"
+#include "libcgt/GL/GLUtilities.h"
 
 #include "static_multi_camera_pipeline.h"
 
@@ -213,11 +216,6 @@ void StaticMultiCameraGLState::Render(const PerspectiveCamera& free_camera) {
   }
   DrawInputsAndIntermediates();
 }
-
-#include <core/math/MathUtils.h>
-#include <core/geometry/RangeUtils.h>
-#include <GLUtilities.h>
-#include <vecmath/Vector4f.h>
 
 // TODO: make a draw textures across accumulator.
 void StaticMultiCameraGLState::DrawInputsAndIntermediates() {

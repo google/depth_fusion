@@ -20,13 +20,13 @@
 #include <thrust/execution_policy.h>
 #include <thrust/reduce.h>
 
-#include <core/vecmath/Quat4f.h>
-#include <core/time/TimeUtils.h>
-#include <cuda/Event.h>
-#include <cuda/MathUtils.h>
-#include <cuda/Rect2i.h>
-#include <cuda/ThreadMath.cuh>
-#include <cuda/VecmathConversions.h>
+#include "libcgt/core/vecmath/Quat4f.h"
+#include "libcgt/core/time/TimeUtils.h"
+#include "libcgt/cuda/Event.h"
+#include "libcgt/cuda/MathUtils.h"
+#include "libcgt/cuda/Rect2i.h"
+#include "libcgt/cuda/ThreadMath.cuh"
+#include "libcgt/cuda/VecmathConversions.h"
 
 #include "camera_math.cuh"
 

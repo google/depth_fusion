@@ -15,7 +15,7 @@
 
 #include <unordered_map>
 
-#include <core/common/ArrayUtils.h>
+#include "libcgt/core/common/ArrayUtils.h"
 
 using libcgt::core::arrayutils::readViewOf;
 using libcgt::core::vecmath::SimilarityTransform;

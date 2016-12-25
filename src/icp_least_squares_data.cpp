@@ -13,7 +13,7 @@
 // limitations under the License.
 #include "icp_least_squares_data.h"
 
-#include "Eigen/Dense"
+#include "third_party/Eigen/Dense"
 
 void Solve(const ICPLeastSquaresData& system, float x[6]) {
   Eigen::Matrix<float, 6, 6> a;

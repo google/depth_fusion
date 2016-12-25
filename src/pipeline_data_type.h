@@ -14,7 +14,7 @@
 #ifndef PIPELINE_DATA_TYPE_H
 #define PIPELINE_DATA_TYPE_H
 
-#include <bitmask_operators.hpp>
+#include <third_party/bitmask_operators.hpp>
 
 enum class PipelineDataType {
   NONE = 0,

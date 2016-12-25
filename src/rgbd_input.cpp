@@ -15,11 +15,11 @@
 
 #include <cassert>
 
-#include <camera_wrappers/Kinect1x/KinectUtils.h>
-#include <camera_wrappers/PixelFormat.h>
-#include <core/common/ArrayUtils.h>
-#include <core/imageproc/ColorMap.h>
-#include <core/imageproc/Swizzle.h>
+#include "libcgt/camera_wrappers/Kinect1x/KinectUtils.h"
+#include "libcgt/camera_wrappers/PixelFormat.h"
+#include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/core/imageproc/ColorMap.h"
+#include "libcgt/core/imageproc/Swizzle.h"
 
 #include "input_buffer.h"
 

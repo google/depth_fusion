@@ -13,10 +13,10 @@
 // limitations under the License.
 #include "rgbd_camera_parameters.h"
 
-#include <core/vecmath/EuclideanTransform.h>
-#include <io/PortableFloatMapIO.h>
-#include <opencv_interop/VecmathUtils.h>
-#include <pystring/pystring.h>
+#include "libcgt/core/io/PortableFloatMapIO.h"
+#include "libcgt/core/vecmath/EuclideanTransform.h"
+#include "libcgt/opencv_interop/VecmathUtils.h"
+#include <third_party/pystring/pystring.h>
 
 using namespace pystring;
 using namespace libcgt::core::vecmath;

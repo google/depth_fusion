@@ -19,11 +19,11 @@
 #include <GL/glew.h>
 #include <QOpenGLWidget>
 
-#include <core/cameras/PerspectiveCamera.h>
-#include <core/common/Array2D.h>
-#include <core/common/ArrayUtils.h>
-#include <core/common/BasicTypes.h>
-#include <qt_interop/FPSControls.h>
+#include "libcgt/core/cameras/PerspectiveCamera.h"
+#include "libcgt/core/common/Array2D.h"
+#include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/core/common/BasicTypes.h"
+#include "libcgt/qt_interop/FPSControls.h"
 
 #include "single_moving_camera_gl_state.h"
 #include "static_multi_camera_gl_state.h"

@@ -15,9 +15,9 @@
 
 #include <cassert>
 
-#include <cuda/Event.h>
-#include <cuda/MathUtils.h>
-#include <cuda/VecmathConversions.h>
+#include "libcgt/cuda/Event.h"
+#include "libcgt/cuda/MathUtils.h"
+#include "libcgt/cuda/VecmathConversions.h"
 
 #include "fuse.h"
 #include "marching_cubes.h"

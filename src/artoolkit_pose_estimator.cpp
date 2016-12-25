@@ -17,7 +17,7 @@
 
 #include <AR/gsub_lite.h>
 
-#include <core/vecmath/Matrix4f.h>
+#include "libcgt/core/vecmath/Matrix4f.h"
 
 #include "rgbd_camera_parameters.h"
 
@@ -140,8 +140,8 @@ ARToolkitPoseEstimator::~ARToolkitPoseEstimator() {
   }
 }
 
-#include <core/common/ArrayUtils.h>
-#include <core/time/TimeUtils.h>
+#include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/core/time/TimeUtils.h"
 
 ARToolkitPoseEstimator::Result ARToolkitPoseEstimator::EstimatePose(
   Array2DReadView<uint8x3> bgr) {

@@ -16,10 +16,10 @@
 
 #include <vector_types.h>
 
-#include <cuda/KernelArray2D.h>
-#include <cuda/KernelArray3D.h>
-#include <cuda/float3x3.h>
-#include <cuda/float4x4.h>
+#include "libcgt/cuda/KernelArray2D.h"
+#include "libcgt/cuda/KernelArray3D.h"
+#include "libcgt/cuda/float3x3.h"
+#include "libcgt/cuda/float4x4.h"
 
 #include "regular_grid_tsdf.h"
 

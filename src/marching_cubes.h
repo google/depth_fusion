@@ -16,10 +16,10 @@
 
 #include <vector>
 
-#include <core/common/Array3D.h>
-#include <core/vecmath/SimilarityTransform.h>
-#include <core/vecmath/Vector3f.h>
-#include <core/geometry/TriangleMesh.h>
+#include "libcgt/core/common/Array3D.h"
+#include "libcgt/core/vecmath/SimilarityTransform.h"
+#include "libcgt/core/vecmath/Vector3f.h"
+#include "libcgt/core/geometry/TriangleMesh.h"
 
 #include "tsdf.h"
 

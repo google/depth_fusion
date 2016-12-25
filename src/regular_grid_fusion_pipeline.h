@@ -16,12 +16,12 @@
 
 #include <QObject>
 
-#include <core/cameras/PerspectiveCamera.h>
-#include <core/geometry/TriangleMesh.h>
-#include <core/vecmath/Vector2i.h>
-#include <core/vecmath/Vector3i.h>
-#include <core/vecmath/EuclideanTransform.h>
-#include <cuda/DeviceArray2D.h>
+#include "libcgt/core/cameras/PerspectiveCamera.h"
+#include "libcgt/core/geometry/TriangleMesh.h"
+#include "libcgt/core/vecmath/Vector2i.h"
+#include "libcgt/core/vecmath/Vector3i.h"
+#include "libcgt/core/vecmath/EuclideanTransform.h"
+#include "libcgt/cuda/DeviceArray2D.h"
 
 #include "artoolkit_pose_estimator.h"
 #include "regular_grid_tsdf.h"

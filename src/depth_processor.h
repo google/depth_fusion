@@ -14,10 +14,11 @@
 #ifndef DEPTH_PROCESSOR_H
 #define DEPTH_PROCESSOR_H
 
-#include <core/cameras/Intrinsics.h>
-#include <core/vecmath/Range1f.h>
-#include <core/vecmath/Vector4f.h>
-#include <cuda/DeviceArray2D.h>
+#include "libcgt/core/cameras/Camera.h"
+#include "libcgt/core/cameras/Intrinsics.h"
+#include "libcgt/core/vecmath/Range1f.h"
+#include "libcgt/core/vecmath/Vector4f.h"
+#include "libcgt/cuda/DeviceArray2D.h"
 
 class DepthProcessor {
  public:

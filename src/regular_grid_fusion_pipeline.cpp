@@ -15,8 +15,8 @@
 
 #include <cassert>
 
-#include <core/common/ArrayUtils.h>
-#include <core/imageproc/ColorMap.h>
+#include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/core/imageproc/ColorMap.h"
 
 using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::inverse;

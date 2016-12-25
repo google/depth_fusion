@@ -13,10 +13,10 @@
 // limitations under the License.
 #include "raycast.h"
 
-#include <cuda/Box3f.h>
-#include <cuda/Event.h>
-#include <cuda/MathUtils.h>
-#include <cuda/ThreadMath.cuh>
+#include "libcgt/cuda/Box3f.h"
+#include "libcgt/cuda/Event.h"
+#include "libcgt/cuda/MathUtils.h"
+#include "libcgt/cuda/ThreadMath.cuh"
 
 #include "camera_math.cuh"
 #include "tsdf.h"

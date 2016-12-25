@@ -15,12 +15,11 @@
 
 #include <GL/glew.h>
 
-#include <core/common/ArrayView.h>
-#include <core/common/ArrayUtils.h>
-#include <core/geometry/RectangleUtils.h>
-#include <core/imageproc/ColorMap.h>
-
-#include <GL/common/GLUtilities.h>
+#include "libcgt/core/common/ArrayView.h"
+#include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/core/geometry/RectangleUtils.h"
+#include "libcgt/core/imageproc/ColorMap.h"
+#include "libcgt/GL/GLUtilities.h"
 
 #include "input_buffer.h"
 #include "regular_grid_fusion_pipeline.h"

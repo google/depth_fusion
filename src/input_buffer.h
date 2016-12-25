@@ -16,10 +16,10 @@
 
 #include <mutex>
 
-#include <core/common/Array2D.h>
-#include <core/common/BasicTypes.h>
-#include <core/vecmath/EuclideanTransform.h>
-#include <core/vecmath/Vector2i.h>
+#include "libcgt/core/common/Array2D.h"
+#include "libcgt/core/common/BasicTypes.h"
+#include "libcgt/core/vecmath/EuclideanTransform.h"
+#include "libcgt/core/vecmath/Vector2i.h"
 
 struct InputBuffer {
 

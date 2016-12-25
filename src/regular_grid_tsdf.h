@@ -14,15 +14,15 @@
 #ifndef REGULAR_GRID_TSDF_H
 #define REGULAR_GRID_TSDF_H
 
-#include <core/geometry/TriangleMesh.h>
-#include <core/vecmath/Box3f.h>
-#include <core/vecmath/Matrix4f.h>
-#include <core/vecmath/Range1f.h>
-#include <core/vecmath/SimilarityTransform.h>
-#include <core/vecmath/Vector3i.h>
-#include <core/vecmath/Vector4f.h>
-#include <cuda/DeviceArray2D.h>
-#include <cuda/DeviceArray3D.h>
+#include "libcgt/core/geometry/TriangleMesh.h"
+#include "libcgt/core/vecmath/Box3f.h"
+#include "libcgt/core/vecmath/Matrix4f.h"
+#include "libcgt/core/vecmath/Range1f.h"
+#include "libcgt/core/vecmath/SimilarityTransform.h"
+#include "libcgt/core/vecmath/Vector3i.h"
+#include "libcgt/core/vecmath/Vector4f.h"
+#include "libcgt/cuda/DeviceArray2D.h"
+#include "libcgt/cuda/DeviceArray3D.h"
 
 #include "tsdf.h"
 

@@ -14,11 +14,11 @@
 #ifndef RGBD_CAMERA_PARAMETERS_H
 #define RGBD_CAMERA_PARAMETERS_H
 
-#include <core/cameras/Intrinsics.h>
-#include <core/common/Array2D.h>
-#include <core/vecmath/EuclideanTransform.h>
-#include <core/vecmath/Range1f.h>
-#include <core/vecmath/Vector2i.h>
+#include "libcgt/core/cameras/Intrinsics.h"
+#include "libcgt/core/common/Array2D.h"
+#include "libcgt/core/vecmath/EuclideanTransform.h"
+#include "libcgt/core/vecmath/Range1f.h"
+#include "libcgt/core/vecmath/Vector2i.h"
 
 #include <opencv2/core/persistence.hpp>
 

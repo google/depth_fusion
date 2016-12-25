@@ -16,9 +16,9 @@
 #include <gflags/gflags.h>
 #include <QApplication>
 
-#include <camera_wrappers/StreamConfig.h>
-#include <core/vecmath/EuclideanTransform.h>
-#include <core/vecmath/SimilarityTransform.h>
+#include "libcgt/camera_wrappers/StreamConfig.h"
+#include "libcgt/core/vecmath/EuclideanTransform.h"
+#include "libcgt/core/vecmath/SimilarityTransform.h"
 
 #include "control_widget.h"
 #include "input_buffer.h"
@@ -128,10 +128,9 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
   return app.exec();
 }
 
-#include <core/vecmath/Quat4f.h>
-
-#include <opencv_interop/Calib3d.h>
-#include <opencv_interop/VecmathUtils.h>
+#include "libcgt/core/vecmath/Quat4f.h"
+#include "libcgt/opencv_interop/Calib3d.h"
+#include "libcgt/opencv_interop/VecmathUtils.h"
 
 using libcgt::opencv_interop::cameraMatrixCVToGL;
 using libcgt::opencv_interop::cameraMatrixToIntrinsics;
@@ -187,7 +186,7 @@ SimilarityTransform MakeWorldFromGrid(const Vector3f& center,
   return t1;
 }
 
-#include <io/NumberedFilenameBuilder.h>
+#include "libcgt/core/io/NumberedFilenameBuilder.h"
 
 int MultiStaticCameraMain(int argc, char* argv[]) {
   QApplication app(argc, argv);

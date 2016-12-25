@@ -17,10 +17,10 @@
 #include <cstdint>
 #include <memory>
 
-#include <core/common/Array2D.h>
-#include <core/common/BasicTypes.h>
-#include <camera_wrappers/RGBDStream.h>
-#include <camera_wrappers/OpenNI2/OpenNI2Camera.h>
+#include "libcgt/core/common/Array2D.h"
+#include "libcgt/core/common/BasicTypes.h"
+#include "libcgt/camera_wrappers/RGBDStream.h"
+#include "libcgt/camera_wrappers/OpenNI2/OpenNI2Camera.h"
 
 // TODO(jiawen): Figure out a way to forward declare RGBDInputStream.
 

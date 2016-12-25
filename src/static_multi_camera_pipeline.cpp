@@ -13,7 +13,7 @@
 // limitations under the License.
 #include "static_multi_camera_pipeline.h"
 
-#include <core/common/ArrayUtils.h>
+#include "libcgt/core/common/ArrayUtils.h"
 
 using libcgt::core::arrayutils::cast;
 using libcgt::core::cameras::Intrinsics;

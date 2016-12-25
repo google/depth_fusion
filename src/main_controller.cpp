@@ -16,7 +16,7 @@
 #include <gflags/gflags.h>
 #include <QTimer>
 
-#include <camera_wrappers/PoseStream.h>
+#include "libcgt/camera_wrappers/PoseStream.h"
 
 #include "control_widget.h"
 #include "main_widget.h"

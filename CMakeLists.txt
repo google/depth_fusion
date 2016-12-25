@@ -2,7 +2,8 @@ cmake_minimum_required( VERSION 3.4 )
 project( depth_fusion )
 
 set_property( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-	PROPERTY VS_STARTUP_PROJECT depth_fusion)
+    PROPERTY VS_STARTUP_PROJECT depth_fusion
+)
 
 # gflags
 if( EXISTS "third_party/gflags/CMakeLists.txt" )
@@ -13,13 +14,11 @@ endif()
 
 # OpenCV
 find_package( OpenCV REQUIRED )
-include_directories( ${OpenCV_INCLUDE_DIRS} )
 
-# GLEW
+# OpenGL and GLEW.
 # GLEW needs to come before CUDA's samples
 find_package( OpenGL REQUIRED )
 find_package( GLEW REQUIRED )
-include_directories( ${GLEW_INCLUDE_DIRS} )
 
 # CUDA
 find_package( CUDA REQUIRED )
@@ -49,60 +48,50 @@ find_package( Qt5OpenGL )
 find_package( Qt5Widgets )
 
 # ARToolkit
-# TODO: learn how to import it
-# TODO: third_party?
+# TODO: package ARToolkit under third_party.
 include_directories( c:/opt/local/include )
 link_directories( c:/opt/local/lib )
 
 # libcgt
-include_directories( ../libcgt/build/lib/include )
-include_directories( ../libcgt/build/lib/include/core )
-include_directories( ../libcgt/build/lib/include/GL/common )
-include_directories( ../libcgt/build/lib/include/GL/GL_45 )
-link_directories( ../libcgt/build/lib/lib )
-
-# third_party
-include_directories( third_party )
+find_package( libcgt REQUIRED )
+# BUG(CMake): target_include_directories doesn't work with CUDA.
+# Or maybe CUDA targets just don't get dependent paths correctly.
+include_directories( ${libcgt_DIR}/../.. )
 
 file( GLOB_RECURSE HEADERS src/*.h src/*.inl src/*.cuh )
 file( GLOB_RECURSE SOURCES_CPP src/*.cpp )
 file( GLOB_RECURSE SOURCES_CU src/*.cu )
 
 CUDA_ADD_EXECUTABLE( depth_fusion ${HEADERS} ${SOURCES_CPP} ${SOURCES_CU} )
-target_compile_definitions( depth_fusion PRIVATE GL_PLATFORM_45 )
 set_property( TARGET depth_fusion PROPERTY CXX_STANDARD 11 )
-
-# TODO: use import and export library
+target_compile_definitions( depth_fusion
+    PRIVATE GL_PLATFORM_45 _USE_MATH_DEFINES )
+target_include_directories( depth_fusion PRIVATE . )
 target_link_libraries( depth_fusion
-	gflags
-	opengl32 GLEW::GLEW
-	${CUDA_LIBRARIES}
-	Qt5::Core Qt5::OpenGL Qt5::Widgets
-	${OpenCV_LIBS}
-	debug cgt_cored
-	debug cgt_cudad
-	debug cgt_gld
-	debug cgt_camera_wrappersd
-	debug cgt_opencv_interopd
-	debug cgt_qt_interopd
-	debug ARd
-	debug AR2d
-	debug ARICPd
-	debug ARgsub_lited
-	debug ARMultid
-	debug ARUtild
-	optimized cgt_core
-	optimized cgt_cuda
-	optimized cgt_gl
-	optimized cgt_camera_wrappers
-	optimized cgt_opencv_interop
-	optimized cgt_qt_interop
-	optimized AR
-	optimized AR2
-	optimized ARgsub_lite
-	optimized ARICP
-	optimized ARMulti
-	optimized ARUtil
+    gflags
+    opengl32 GLEW::GLEW
+    ${CUDA_LIBRARIES}
+    Qt5::Core Qt5::OpenGL Qt5::Widgets
+    ${OpenCV_LIBS}
+	cgt_core
+    cgt_cuda
+    cgt_gl
+    cgt_camera_wrappers
+    cgt_opencv_interop
+    cgt_qt_interop
+	# HACK: ARToolkit
+    debug ARd
+    debug AR2d
+    debug ARICPd
+    debug ARgsub_lited
+    debug ARMultid
+    debug ARUtild
+    optimized AR
+    optimized AR2
+    optimized ARgsub_lite
+    optimized ARICP
+    optimized ARMulti
+    optimized ARUtil
 )
 
 # TODO: make this build on Linux. It might need -l GL.

@@ -13,7 +13,7 @@
 // limitations under the License.
 #include "single_moving_camera_gl_state.h"
 
-#include <core/common/ArrayUtils.h>
+#include "libcgt/core/common/ArrayUtils.h"
 
 #include "regular_grid_fusion_pipeline.h"
 
@@ -375,11 +375,11 @@ void SingleMovingCameraGLState::DrawFullscreenRaycast() {
   glEnable(GL_DEPTH_TEST);
 }
 
-#include <core/geometry/RangeUtils.h>
-#include <core/geometry/RectangleUtils.h>
-#include <core/math/Arithmetic.h>
-#include <core/vecmath/Vector4f.h>
-#include <GLUtilities.h>
+#include "libcgt/core/geometry/RangeUtils.h"
+#include "libcgt/core/geometry/RectangleUtils.h"
+#include "libcgt/core/math/Arithmetic.h"
+#include "libcgt/core/vecmath/Vector4f.h"
+#include "libcgt/GL/GLUtilities.h"
 
 using libcgt::core::geometry::transformBetween;
 using libcgt::core::geometry::translate;
