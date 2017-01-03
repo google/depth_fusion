@@ -65,7 +65,7 @@ void MainWidget::SetPipeline(RegularGridFusionPipeline* pipeline) {
   moving_pipeline_ = pipeline;
 }
 
-void MainWidget::SetPipeline(StaticMultiCameraPipeline* pipeline) {
+void MainWidget::SetPipeline(MultiStaticCameraPipeline* pipeline) {
   static_pipeline_ = pipeline;
 }
 
@@ -73,7 +73,7 @@ SingleMovingCameraGLState* MainWidget::GetSingleMovingCameraGLState() const {
   return moving_gl_state_.get();
 }
 
-StaticMultiCameraGLState* MainWidget::GetStaticMultiCameraGLState() const {
+MultiStaticCameraGLState* MainWidget::GetMultiStaticCameraGLState() const {
   return static_gl_state_.get();
 }
 
@@ -100,7 +100,7 @@ void MainWidget::initializeGL() {
   }
 
   if (static_pipeline_ != nullptr) {
-    static_gl_state_ = std::make_unique<StaticMultiCameraGLState>(
+    static_gl_state_ = std::make_unique<MultiStaticCameraGLState>(
       static_pipeline_, this);
   }
 }

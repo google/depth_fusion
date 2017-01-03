@@ -28,7 +28,10 @@ struct PoseFrame {
     COLOR_ARTOOLKIT = 16,
     COLOR_ARUCO = 17,
 
-    DEPTH_ICP = 128
+    DEPTH_ICP = 128,
+
+    COLOR_ARTOOLKIT_AND_DEPTH_ICP = 256,
+    COLOR_ARUCO_AND_DEPTH_ICP = 257
   };
 
   using EuclideanTransform = libcgt::core::vecmath::EuclideanTransform;

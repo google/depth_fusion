@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "static_multi_camera_pipeline.h"
+#include "multi_static_camera_pipeline.h"
 
 #include "libcgt/core/common/ArrayUtils.h"
 
@@ -19,7 +19,7 @@ using libcgt::core::arrayutils::cast;
 using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::SimilarityTransform;
 
-StaticMultiCameraPipeline::StaticMultiCameraPipeline(
+MultiStaticCameraPipeline::MultiStaticCameraPipeline(
   const std::vector<RGBDCameraParameters>& camera_params,
   const std::vector<EuclideanTransform>& depth_camera_poses_cfw,
   const Vector3i& grid_resolution,
@@ -46,29 +46,29 @@ StaticMultiCameraPipeline::StaticMultiCameraPipeline(
   }
 }
 
-int StaticMultiCameraPipeline::NumCameras() const {
+int MultiStaticCameraPipeline::NumCameras() const {
   return static_cast<int>(camera_params_.size());
 }
 
-const RGBDCameraParameters& StaticMultiCameraPipeline::GetCameraParameters(
+const RGBDCameraParameters& MultiStaticCameraPipeline::GetCameraParameters(
   int camera_index ) const {
   return camera_params_[camera_index];
 }
 
-Box3f StaticMultiCameraPipeline::TSDFGridBoundingBox() const {
+Box3f MultiStaticCameraPipeline::TSDFGridBoundingBox() const {
   return regular_grid_.BoundingBox();
 }
 
 const SimilarityTransform&
-StaticMultiCameraPipeline::TSDFWorldFromGridTransform() const {
+MultiStaticCameraPipeline::TSDFWorldFromGridTransform() const {
   return regular_grid_.WorldFromGrid();
 }
 
-void StaticMultiCameraPipeline::Reset() {
+void MultiStaticCameraPipeline::Reset() {
   regular_grid_.Reset();
 }
 
-void StaticMultiCameraPipeline::NotifyInputUpdated(int camera_index,
+void MultiStaticCameraPipeline::NotifyInputUpdated(int camera_index,
                                                    bool color_updated,
                                                    bool depth_updated) {
   depth_meters_[camera_index].copyFromHost(
@@ -79,16 +79,16 @@ void StaticMultiCameraPipeline::NotifyInputUpdated(int camera_index,
     undistorted_depth_meters_[camera_index]);
 }
 
-InputBuffer& StaticMultiCameraPipeline::GetInputBuffer(int camera_index) {
+InputBuffer& MultiStaticCameraPipeline::GetInputBuffer(int camera_index) {
   return input_buffers_[camera_index];
 }
 
-const DeviceArray2D<float>& StaticMultiCameraPipeline::GetUndistortedDepthMap(
+const DeviceArray2D<float>& MultiStaticCameraPipeline::GetUndistortedDepthMap(
   int camera_index) {
   return undistorted_depth_meters_[camera_index];
 }
 
-PerspectiveCamera StaticMultiCameraPipeline::GetDepthCamera(
+PerspectiveCamera MultiStaticCameraPipeline::GetDepthCamera(
   int camera_index) const {
   return PerspectiveCamera(
     depth_camera_poses_cfw_[camera_index],
@@ -99,7 +99,7 @@ PerspectiveCamera StaticMultiCameraPipeline::GetDepthCamera(
   );
 }
 
-void StaticMultiCameraPipeline::Fuse() {
+void MultiStaticCameraPipeline::Fuse() {
   // Right now, fuse them all, time aligned.
   // sweep over all the ones that are ready.
 
@@ -118,7 +118,7 @@ void StaticMultiCameraPipeline::Fuse() {
   }
 }
 
-void StaticMultiCameraPipeline::Raycast(const PerspectiveCamera& camera,
+void MultiStaticCameraPipeline::Raycast(const PerspectiveCamera& camera,
                                         DeviceArray2D<float4>& world_points,
                                         DeviceArray2D<float4>& world_normals)
 {
@@ -132,7 +132,7 @@ void StaticMultiCameraPipeline::Raycast(const PerspectiveCamera& camera,
   );
 }
 
-TriangleMesh StaticMultiCameraPipeline::Triangulate(
+TriangleMesh MultiStaticCameraPipeline::Triangulate(
   const Matrix4f& output_from_world) const {
   TriangleMesh mesh = regular_grid_.Triangulate();
 

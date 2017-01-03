@@ -40,35 +40,49 @@ class RegularGridFusionPipeline : public QObject {
 
  public:
 
+   // Initial pose only used in in DEPTH_ICP mode.
   RegularGridFusionPipeline(
     const RGBDCameraParameters& camera_params,
     const Vector3i& grid_resolution,
     const SimilarityTransform& world_from_grid,
-    const PoseFrame& initial_pose);
+    PoseFrame::EstimationMethod pose_estimation_method =
+        PoseFrame::EstimationMethod::COLOR_ARTOOLKIT_AND_DEPTH_ICP,
+    const PoseFrame& initial_pose = PoseFrame{} );
+
+  // Construct a pipeline from an existing pose history.
+  // Does no pose estimation.
+  // TODO: do ICP on top.
+  RegularGridFusionPipeline(
+    const RGBDCameraParameters& camera_params,
+    const Vector3i& grid_resolution,
+    const SimilarityTransform& world_from_grid,
+    const std::vector<PoseFrame>& pose_history);
 
   void Reset();
 
   const RGBDCameraParameters& GetCameraParameters() const;
 
-  void NotifyInputUpdated(bool color_updated, bool depth_updated);
-
+  // Get a mutable reference to the input buffer. Clients should update the
+  // values in the input buffer then call NotifyInputUpdated();
   InputBuffer& GetInputBuffer();
 
-  // TODO: oriented box class
+  // TODO: refactor into separate NotifyColorUpdated(), NotifyDepthUpdated()
+  // calls. It is possible that they are synchronized: they have the same frame
+  // index and very similar times. However, they are unlikely to be exactly the
+  // same.
+  void NotifyInputUpdated(bool color_updated, bool depth_updated);
+
+  // Returns the TSDF grid's axis aligned bounding box.
+  // (0, 0, 0) --> Resolution().
+  // TODO: implement a simple oriented box class.
   Box3f TSDFGridBoundingBox() const;
+
+  // The transformation that yields world coordinates (in meters) from
+  // grid coordinates [0, resolution]^3 (in samples).
   const SimilarityTransform& TSDFWorldFromGridTransform() const;
 
   PerspectiveCamera ColorCamera() const;
   PerspectiveCamera DepthCamera() const;
-
-  // Use icp to estimate the
-  // TODO(jiawen): consider writing as a single function that:
-  // - computes pose of the incoming frame
-  // - fuses it
-  // - runs raycasting for display and caches it for the next frame
-  bool UpdatePoseWithICP();
-
-  bool UpdatePoseWithColorCamera();
 
   // Update the regular grid with the latest image.
   void Fuse();
@@ -102,6 +116,17 @@ class RegularGridFusionPipeline : public QObject {
   void dataChanged(PipelineDataType type);
 
  private:
+
+   // Try to estimate the rgbd camera pose using the latest color frame of the
+   // pipeline's input buffer. If it succeeded, it will be appended to the
+   // pose history and returns true. Otherwise, returns false.
+   bool UpdatePoseWithColorCamera();
+
+   // Try to estimate the rgbd camera pose using the latest depth frame of the
+   // pipeline's input buffer. If it succeeded, it will be appended to the
+   // pose history and returns true. Otherwise, returns false.
+   bool UpdatePoseWithDepthCamera();
+
   // CPU input buffers.
   InputBuffer input_buffer_;
 
@@ -128,16 +153,18 @@ class RegularGridFusionPipeline : public QObject {
 
   RegularGridTSDF regular_grid_;
 
-  // TODO: PoseEstimator class
+  // TODO: move this into PoseEstimator?
   const int kMaxSuccessiveFailuresBeforeReset = 1000;
   int num_successive_failures_ = 0;
   ProjectivePointPlaneICP icp_;
   ARToolkitPoseEstimator color_pose_estimator_;
 
-  const PoseFrame initial_pose_;
+  PoseFrame::EstimationMethod pose_estimation_method_;
 
-  // Stores camera_from_world.
+  const PoseFrame initial_pose_;
   std::vector<PoseFrame> pose_history_;
+
+  std::vector<PoseFrame> precomputed_pose_history_;
 
   const RGBDCameraParameters camera_params_;
   // camera_params_.depth_intrinsics_, stored as a Vector4f.

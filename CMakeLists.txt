@@ -62,7 +62,10 @@ file( GLOB_RECURSE HEADERS src/*.h src/*.inl src/*.cuh )
 file( GLOB_RECURSE SOURCES_CPP src/*.cpp )
 file( GLOB_RECURSE SOURCES_CU src/*.cu )
 
-CUDA_ADD_EXECUTABLE( depth_fusion ${HEADERS} ${SOURCES_CPP} ${SOURCES_CU} )
+# TODO: fast math:
+# LIST(APPEND CUDA_NVCC_FLAGS --compiler-options -fno-strict-aliasing -lineinfo -use_fast_math -Xptxas -dlcm=cg)
+# LIST(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_20,code=sm_20)
+cuda_add_executable( depth_fusion ${HEADERS} ${SOURCES_CPP} ${SOURCES_CU} )
 set_property( TARGET depth_fusion PROPERTY CXX_STANDARD 11 )
 target_compile_definitions( depth_fusion
     PRIVATE GL_PLATFORM_45 _USE_MATH_DEFINES )

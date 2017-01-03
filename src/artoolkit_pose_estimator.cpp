@@ -155,12 +155,11 @@ ARToolkitPoseEstimator::Result ARToolkitPoseEstimator::EstimatePose(
   AR2VideoBufferT frame = {};
   // TODO: move into libcgt::colormath, make map() work.
   // TODO: fixed point to luma
-  //libcgt::core::arrayutils::map(libcgt::core::arrayutils::flipY(bgr), luma_.writeView(),
   libcgt::core::arrayutils::map(bgr, luma_.writeView(),
-    [&] ( uint8x3 bgr )
+    [&] (uint8x3 bgr)
     {
       float z = 0.25f * bgr.x + 0.5f * bgr.y + 0.25f * bgr.z;
-      return static_cast< uint8_t >( z );
+      return static_cast<uint8_t>(z);
     } );
 
   frame.buff = reinterpret_cast<ARUint8*>(const_cast<uint8x3*>(bgr.pointer()));
@@ -172,26 +171,32 @@ ARToolkitPoseEstimator::Result ARToolkitPoseEstimator::EstimatePose(
 
   int detect_result = arDetectMarker(tracker_, &frame);
   if (detect_result == 0) {
-    ARMarkerInfo* detected_markers = arGetMarker( tracker_ );
-    int num_detected_markers = arGetMarkerNum(tracker_);
-    printf("Detected %d markers\n", num_detected_markers);
-    if (num_detected_markers > 0) {
-      // TODO: arGetTransMatMultiSquareRobust()
+    ARMarkerInfo* detected_markers = arGetMarker(tracker_);
+    result.nMarkers = arGetMarkerNum(tracker_);
+    if (result.nMarkers > 0) {
+      // TODO: add a config option for this.
       //ARdouble err = arGetTransMatMultiSquare(tracker_3d_, detected_markers,
       ARdouble err = arGetTransMatMultiSquareRobust(tracker_3d_, detected_markers,
-        num_detected_markers, multi_marker_config_);
+        result.nMarkers, multi_marker_config_);
       if (err != -1.0) {
-        Matrix4f trans = ConvertToCameraFromWorldMeters(multi_marker_config_->trans);
-
-        result.world_from_camera = inverse(EuclideanTransform::fromMatrix(trans));
+        Matrix4f trans = ConvertToCameraFromWorldMeters(
+          multi_marker_config_->trans);
+        result.error = err;
+        result.world_from_camera = inverse(
+          EuclideanTransform::fromMatrix(trans));
         result.valid = true;
-        }
+      }
     }
   }
 
   auto t1 = std::chrono::high_resolution_clock::now();
-  printf( "ARToolkit pose estimation took %lld ms\n",
+  if(result.valid) {
+    printf("ARToolkit: succeeded, nMarkers = %d, error = %lf.\n",
+      result.nMarkers, result.error);
+  } else {
+    printf("ARToolkit: failed.\n");
+  }
+  printf( "ARToolkit: pose estimation took %lld ms\n",
     libcgt::core::time::dtMS( t0, t1 ) );
-  // TODO: Else: error.
   return result;
 }

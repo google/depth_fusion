@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "static_multi_camera_gl_state.h"
+#include "multi_static_camera_gl_state.h"
 
 #include "libcgt/core/common/ForND.h"
 #include "libcgt/core/geometry/RectangleUtils.h"
@@ -19,7 +19,7 @@
 #include "libcgt/core/vecmath/Vector4f.h"
 #include "libcgt/GL/GLUtilities.h"
 
-#include "static_multi_camera_pipeline.h"
+#include "multi_static_camera_pipeline.h"
 
 using libcgt::core::for2D;
 using libcgt::core::geometry::translate;
@@ -58,8 +58,8 @@ const bool kDrawUnprojectedPointCloud = false;
 const bool kDrawFullscreenRaycast = true;
 const int kFullscreenRaycastDownsampleFactor = 1;
 
-StaticMultiCameraGLState::StaticMultiCameraGLState(
-  StaticMultiCameraPipeline* pipeline, QOpenGLWidget* parent) :
+MultiStaticCameraGLState::MultiStaticCameraGLState(
+  MultiStaticCameraPipeline* pipeline, QOpenGLWidget* parent) :
   parent_(parent),
   pipeline_(pipeline),
   depth_camera_frusta_(pipeline->NumCameras()),
@@ -161,11 +161,11 @@ StaticMultiCameraGLState::StaticMultiCameraGLState(
 	linear_sampler_.setWrapModes(GLWrapMode::CLAMP_TO_EDGE);
 }
 
-void StaticMultiCameraGLState::NotifyTSDFUpdated() {
+void MultiStaticCameraGLState::NotifyTSDFUpdated() {
   tsdf_is_dirty_ = true;
 }
 
-void StaticMultiCameraGLState::Resize(const Vector2i& size) {
+void MultiStaticCameraGLState::Resize(const Vector2i& size) {
   window_size_ = size;
   Vector2i downsampled_size = size / kFullscreenRaycastDownsampleFactor;
   free_camera_world_positions_.resize(downsampled_size);
@@ -183,7 +183,7 @@ void StaticMultiCameraGLState::Resize(const Vector2i& size) {
     );
 }
 
-void StaticMultiCameraGLState::Render(const PerspectiveCamera& free_camera) {
+void MultiStaticCameraGLState::Render(const PerspectiveCamera& free_camera) {
   if (free_camera != free_camera_) {
     free_camera_ = free_camera;
     tsdf_is_dirty_ = true;
@@ -218,7 +218,7 @@ void StaticMultiCameraGLState::Render(const PerspectiveCamera& free_camera) {
 }
 
 // TODO: make a draw textures across accumulator.
-void StaticMultiCameraGLState::DrawInputsAndIntermediates() {
+void MultiStaticCameraGLState::DrawInputsAndIntermediates() {
   glDisable(GL_DEPTH_TEST);
   Rect2i vp = GLUtilities::getViewport();
 
@@ -256,7 +256,7 @@ void StaticMultiCameraGLState::DrawInputsAndIntermediates() {
   glEnable(GL_DEPTH_TEST);
 }
 
-void StaticMultiCameraGLState::DrawWorldAxes() {
+void MultiStaticCameraGLState::DrawWorldAxes() {
   GLSeparableProgram& vs = programs_["drawColorVS"];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
   draw_color_.bind();
@@ -266,7 +266,7 @@ void StaticMultiCameraGLState::DrawWorldAxes() {
   GLProgramPipeline::unbindAll();
 }
 
-void StaticMultiCameraGLState::DrawCameraFrustaAndTSDFGrid() {
+void MultiStaticCameraGLState::DrawCameraFrustaAndTSDFGrid() {
   GLSeparableProgram& vs = programs_["drawColorVS"];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
   draw_color_.bind();
@@ -290,7 +290,7 @@ Matrix4f normalsToRGBA()
 }
 }
 
-void StaticMultiCameraGLState::DrawUnprojectedPointClouds() {
+void MultiStaticCameraGLState::DrawUnprojectedPointClouds() {
   const int kDepthTextureUnit = 0;
 
   unproject_point_cloud_.bind();
@@ -327,7 +327,7 @@ void StaticMultiCameraGLState::DrawUnprojectedPointClouds() {
   }
 }
 
-void StaticMultiCameraGLState::DrawFullscreenRaycast() {
+void MultiStaticCameraGLState::DrawFullscreenRaycast() {
   // Update the buffer.
   if (tsdf_is_dirty_) {
     pipeline_->Raycast(free_camera_,

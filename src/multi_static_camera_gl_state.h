@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef STATIC_MULTI_CAMERA_GL_STATE_H
-#define STATIC_MULTI_CAMERA_GL_STATE_H
+#ifndef MULTI_STATIC_CAMERA_GL_STATE_H
+#define MULTI_STATIC_CAMERA_GL_STATE_H
 
 #include <unordered_map>
 
@@ -33,14 +33,14 @@
 #include "libcgt/GL/GL_45/drawables/TexturedRectangle.h"
 #include "libcgt/GL/GL_45/drawables/WireframeBox.h"
 
-class StaticMultiCameraPipeline;
+class MultiStaticCameraPipeline;
 
-class StaticMultiCameraGLState : public QObject {
+class MultiStaticCameraGLState : public QObject {
 
  Q_OBJECT
 
  public:
-  StaticMultiCameraGLState(StaticMultiCameraPipeline* pipeline,
+  MultiStaticCameraGLState(MultiStaticCameraPipeline* pipeline,
     QOpenGLWidget* parent);
 
   //void NotifyInputUpdated();
@@ -60,7 +60,7 @@ class StaticMultiCameraGLState : public QObject {
 
   // ----- State -----
   QOpenGLWidget* parent_ = nullptr;
-  StaticMultiCameraPipeline* pipeline_ = nullptr;
+  MultiStaticCameraPipeline* pipeline_ = nullptr;
   bool tsdf_is_dirty_ = true;
   PerspectiveCamera free_camera_;
   Vector2i window_size_;
@@ -95,4 +95,4 @@ class StaticMultiCameraGLState : public QObject {
   GLSamplerObject linear_sampler_;
 };
 
-#endif  // STATIC_MULTI_CAMERA_GL_STATE_H
+#endif  // MULTI_STATIC_CAMERA_GL_STATE_H

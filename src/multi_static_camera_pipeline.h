@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef STATIC_MULTI_CAMERA_PIPELINE_H
-#define STATIC_MULTI_CAMERA_PIPELINE_H
+#ifndef MULTI_STATIC_CAMERA_PIPELINE_H
+#define MULTI_STATIC_CAMERA_PIPELINE_H
 
 #include "libcgt/core/cameras/PerspectiveCamera.h"
 #include "libcgt/core/geometry/TriangleMesh.h"
@@ -28,14 +28,14 @@
 #include "input_buffer.h"
 #include "pose_frame.h"
 
-class StaticMultiCameraPipeline {
+class MultiStaticCameraPipeline {
 
   using EuclideanTransform = libcgt::core::vecmath::EuclideanTransform;
   using SimilarityTransform = libcgt::core::vecmath::SimilarityTransform;
 
  public:
 
-  StaticMultiCameraPipeline(
+  MultiStaticCameraPipeline(
     const std::vector<RGBDCameraParameters>& camera_params,
     const std::vector<EuclideanTransform>& depth_camera_poses_cfw,
     const Vector3i& grid_resolution,
@@ -94,4 +94,4 @@ class StaticMultiCameraPipeline {
   std::vector<DeviceArray2D<float2>> depth_camera_undistort_maps_;
 };
 
-#endif  // STATIC_MULTI_CAMERA_PIPELINE_H
+#endif  // MULTI_STATIC_CAMERA_PIPELINE_H

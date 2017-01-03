@@ -26,6 +26,11 @@ ControlWidget::ControlWidget(QWidget* parent) :
     this, &ControlWidget::pauseClicked);
   layout->addWidget(pause_button);
 
+  QPushButton* step_frame_button = new QPushButton("Step One Frame");
+  QObject::connect(step_frame_button, &QPushButton::clicked,
+    this, &ControlWidget::stepClicked);
+  layout->addWidget(step_frame_button);
+
   QPushButton* reset_button = new QPushButton("Reset");
   QObject::connect( reset_button, &QPushButton::clicked,
     this, &ControlWidget::resetClicked);

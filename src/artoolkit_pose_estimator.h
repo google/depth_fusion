@@ -29,6 +29,8 @@ class ARToolkitPoseEstimator {
 
   struct Result {
     bool valid = false;
+    int nMarkers;
+    double error;
     EuclideanTransform world_from_camera;
   };
 

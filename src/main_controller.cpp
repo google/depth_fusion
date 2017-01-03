@@ -14,15 +14,18 @@
 #include "main_controller.h"
 
 #include <gflags/gflags.h>
+#include <QMessageBox>
 #include <QTimer>
 
 #include "libcgt/camera_wrappers/PoseStream.h"
 
 #include "control_widget.h"
 #include "main_widget.h"
+#include "pose_utils.h"
 #include "rgbd_input.h"
 
 DECLARE_string(mode);
+DECLARE_string(sm_input_type);
 
 MainController::MainController(
   RgbdInput* input, RegularGridFusionPipeline* pipeline,
@@ -30,6 +33,7 @@ MainController::MainController(
   input_(input),
   pipeline_(pipeline),
   main_widget_(main_widget) {
+  assert(pipeline_ != nullptr);
 
   read_input_timer_ = new QTimer(this);
   read_input_timer_->setInterval(0);
@@ -38,40 +42,49 @@ MainController::MainController(
 
   QObject::connect(control_widget, &ControlWidget::pauseClicked,
     this, &MainController::OnPauseClicked);
+  QObject::connect(control_widget, &ControlWidget::stepClicked,
+    this, &MainController::OnReadInput);
   QObject::connect(control_widget, &ControlWidget::resetClicked,
     this, &MainController::OnResetClicked);
   QObject::connect(control_widget, &ControlWidget::saveMeshClicked,
     this, &MainController::OnSaveMeshClicked);
   QObject::connect(control_widget, &ControlWidget::savePoseClicked,
     this, &MainController::OnSavePoseClicked);
-
-  if (pipeline != nullptr) {
-    QObject::connect(pipeline, &RegularGridFusionPipeline::dataChanged,
-      main_widget_->GetSingleMovingCameraGLState(),
-      &SingleMovingCameraGLState::OnPipelineDataChanged);
-  }
+  QObject::connect(pipeline, &RegularGridFusionPipeline::dataChanged,
+    main_widget_->GetSingleMovingCameraGLState(),
+    &SingleMovingCameraGLState::OnPipelineDataChanged);
 }
 
 void MainController::OnReadInput() {
   if (FLAGS_mode == "single_moving") {
     bool color_updated;
     bool depth_updated;
-    input_->read(&(pipeline_->GetInputBuffer()), &color_updated, &depth_updated);
-    pipeline_->NotifyInputUpdated(color_updated, depth_updated);
+    input_->read(&(pipeline_->GetInputBuffer()),
+      &color_updated, &depth_updated);
+    if (color_updated || depth_updated) {
+      pipeline_->NotifyInputUpdated(color_updated, depth_updated);
+    } else if (FLAGS_sm_input_type == "file") {
+      // TODO: report end of file correctly.
+      read_input_timer_->stop();
+    }
   } else if (FLAGS_mode == "multi_static") {
     for (size_t i = 0; i < inputs_.size(); ++i) {
-      bool rgb_updated;
+      bool color_updated;
       bool depth_updated;
-      inputs_[i].read(&(smc_pipeline_->GetInputBuffer(i)),
-        &rgb_updated, &depth_updated);
-      smc_pipeline_->NotifyInputUpdated(i, rgb_updated, depth_updated);
+      inputs_[i].read(&(msc_pipeline_->GetInputBuffer(i)),
+        &color_updated, &depth_updated);
+      if (color_updated || depth_updated) {
+        msc_pipeline_->NotifyInputUpdated(i, color_updated, depth_updated);
+      } else if (FLAGS_sm_input_type == "file") {
+        read_input_timer_->stop();
+      }
     }
 
     //if(depth_updated) {
     {
       // TODO: pipeline should emit that TSDF has changed.
-      smc_pipeline_->Fuse();
-      main_widget_->GetStaticMultiCameraGLState()->NotifyTSDFUpdated();
+      msc_pipeline_->Fuse();
+      main_widget_->GetMultiStaticCameraGLState()->NotifyTSDFUpdated();
     }
 
     //if(rgb_updated || depth_updated) {
@@ -90,49 +103,46 @@ void MainController::OnPauseClicked() {
 }
 
 void MainController::OnResetClicked() {
+  // TODO: reset rgbd and pose streams.
   if (pipeline_ != nullptr) {
     pipeline_->Reset();
   }
-  if (smc_pipeline_ != nullptr) {
-    smc_pipeline_->Reset();
+  if (msc_pipeline_ != nullptr) {
+    msc_pipeline_->Reset();
   }
 }
 
 void MainController::OnSaveMeshClicked(QString filename) {
   if (FLAGS_mode == "single_moving") {
     TriangleMesh mesh = pipeline_->Triangulate();
-    bool save_succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+    bool succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+    if (!succeeded) {
+      QMessageBox::critical(main_widget_, "Save Mesh Status",
+        "Failed to save to: " + filename);
+    }
   } else if (FLAGS_mode == "multi_static") {
     // HACK: rot180
     Matrix4f rot180 = Matrix4f::rotateX(static_cast<float>(M_PI));
-    TriangleMesh mesh = smc_pipeline_->Triangulate(rot180);
-    bool save_succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+    TriangleMesh mesh = msc_pipeline_->Triangulate(rot180);
+    bool succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+    if (!succeeded) {
+      QMessageBox::critical(main_widget_, "Save Mesh Status",
+        "Failed to save to: " + filename);
+    }
   }
-  // TODO: messagebox for success
-}
-
-void SavePoses(QString filename, const std::vector<PoseFrame> poses) {
-  // TODO: implement me.
-#if 0
-  libcgt::camera_wrappers::PoseStreamMetadata metadata;
-  metadata.direction = libcgt::camera_wrappers::PoseStreamTransformDirection::CAMERA_FROM_WORLD;
-  metadata.format = libcgt::camera_wrappers::PoseStreamFormat::ROTATION_MATRIX_3X3_COL_MAJOR_AND_TRANSLATION_VECTOR_FLOAT;
-
-  libcgt::camera_wrappers::PoseOutputStream output_stream(metadata,
-    filename.toStdString().c_str());
-
-  // TODO(jiawen): messagebox for success
-  for (size_t i = 0; i < poses.size(); ++i) {
-    bool succeeded = output_stream.write(
-      poses[i].frame_index, poses[i].timestamp_ns,
-      poses[i].camera_from_world.rotation,
-      poses[i].camera_from_world.translation);
-  }
-#endif
 }
 
 void MainController::OnSavePoseClicked(QString filename) {
   if (filename != "") {
-    SavePoses(filename, pipeline_->PoseHistory());
+    printf("Saving pose stream to %s...", filename.toStdString().c_str());
+    bool succeeded = SavePoseHistory(
+      pipeline_->PoseHistory(), filename.toStdString());
+    if (succeeded) {
+      printf("succeeded.\n");
+    } else {
+      printf("failed.\n");
+      QMessageBox::critical(main_widget_, "Save Pose Stream Status",
+        "Failed to save to: " + filename);
+    }
   }
 }

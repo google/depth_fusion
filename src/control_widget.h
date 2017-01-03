@@ -27,6 +27,7 @@ class ControlWidget : public QWidget {
  signals:
 
    void pauseClicked();
+   void stepClicked();
    void resetClicked();
    void saveMeshClicked(QString filename);
    void savePoseClicked(QString filename);

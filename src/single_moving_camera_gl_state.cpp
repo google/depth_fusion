@@ -113,7 +113,7 @@ SingleMovingCameraGLState::SingleMovingCameraGLState(
   	}
   }
 
-  GLTexture::SwizzleTarget swizzle_rrr1[ 4 ] =
+  GLTexture::SwizzleTarget swizzle_rrr1[4] =
   {
     GLTexture::SwizzleTarget::RED,
     GLTexture::SwizzleTarget::RED,
@@ -283,7 +283,7 @@ void SingleMovingCameraGLState::DrawWorldAxes() {
 }
 
 void SingleMovingCameraGLState::DrawCameraFrustaAndTSDFGrid() {
-  GLSeparableProgram& vs = programs_[ "drawColorVS" ];
+  GLSeparableProgram& vs = programs_["drawColorVS"];
   vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
   draw_color_.bind();
 
@@ -398,7 +398,7 @@ void SingleMovingCameraGLState::DrawRemappedTextures(
   draw_texture_.bind();
 
   Vector2i sz = floorToInt(
-    textures[ 0 ].texture->size() * textures[ 0 ].size_scale);
+    textures[0].texture->size() * textures[0].size_scale);
   Rect2i current_rect{ { 0, 0 }, sz };
   for (const auto& tex : textures) {
     GLUtilities::setViewport(current_rect);

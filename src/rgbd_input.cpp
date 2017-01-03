@@ -57,7 +57,7 @@ RgbdInput::RgbdInput(InputType input_type, const char* filename) :
     // Find the rgb stream.
     // TODO: take a dependency on cpp11-range
     for(int i = 0; i < file_input_stream_->metadata().size(); ++i) {
-      const auto& metadata = file_input_stream_->metadata()[ i ];
+      const auto& metadata = file_input_stream_->metadata()[i];
       if(metadata.type == StreamType::COLOR &&
         metadata.format ==  PixelFormat::RGB_U888) {
         color_stream_id_ = i;

@@ -24,6 +24,7 @@
 #include "input_buffer.h"
 #include "main_widget.h"
 #include "main_controller.h"
+#include "pose_utils.h"
 #include "regular_grid_fusion_pipeline.h"
 #include "rgbd_camera_parameters.h"
 #include "rgbd_input.h"
@@ -44,6 +45,13 @@ DEFINE_string(sm_input_type, "openni2",
 DEFINE_string(sm_input_args, "",
   "OPTIONAL for single moving mode: "
   "If sm_input_type is \"file\", the path to a .rgbd file.");
+DEFINE_string(sm_pose_estimator, "artoolkit_icp",
+  "REQUIRED for single moving mode: "
+  "Pose estimator. Valid options: \"artoolkit\", \"icp\", \"artoolkit_icp\", "
+  "or \"file\". If \"file\", sm_pose_file is required. "
+  "Default: \"artoolkit_icp\".");
+DEFINE_string(sm_pose_file, "",
+  "Filename for precomputed pose path.");
 
 DEFINE_bool(ms_use_gui, true,
   "Set true to visualize with GUI, false to run in batch mode.");
@@ -80,40 +88,80 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
   const Vector3i kRegularGridResolution(512); // ~2m^3
   const float kRegularGridVoxelSize = 0.004f; // 4 mm.
 
-  const SimilarityTransform kInitialWorldFromGrid =
-    SimilarityTransform(kRegularGridVoxelSize) *
-    SimilarityTransform(Vector3f(-0.5f * kRegularGridResolution.x,
-      -0.5f * kRegularGridResolution.y, -kRegularGridResolution.z));
-
-  // y up
-  const EuclideanTransform kInitialDepthCameraFromWorld =
-    EuclideanTransform::fromMatrix(
-      Matrix4f::lookAt(
-        { 0, 0, camera_params.depth.depth_range.minimum() },
-        Vector3f{ 0 },
-        Vector3f{ 0, 1, 0 }.normalized()
-      )
-    );
-
   RgbdInput rgbd_input(input_type, FLAGS_sm_input_args.c_str());
 
-  PoseFrame initial_pose_frame = {};
-  initial_pose_frame.method = PoseFrame::EstimationMethod::FIXED_INITIAL;
-  initial_pose_frame.depth_camera_from_world = kInitialDepthCameraFromWorld;
-  initial_pose_frame.color_camera_from_world =
-    camera_params.ConvertToColorCameraFromWorld(kInitialDepthCameraFromWorld);
+  std::unique_ptr<RegularGridFusionPipeline> pipeline;
 
-  RegularGridFusionPipeline pipeline(camera_params,
-    kRegularGridResolution, kInitialWorldFromGrid, initial_pose_frame);
+  if (FLAGS_sm_pose_estimator == "artoolkit" ||
+    FLAGS_sm_pose_estimator == "artoolkit_icp") {
+    // Put the origin at the center of the cube.
+    const SimilarityTransform kInitialWorldFromGrid =
+      SimilarityTransform(kRegularGridVoxelSize) *
+      SimilarityTransform(Vector3f(-0.5f * kRegularGridResolution.x,
+        -0.5f * kRegularGridResolution.y, -0.5f * kRegularGridResolution.z));
 
-  // TODO: pipeline->SetTracker()...
-  // TODO: add different color pose tracking options using gflags.
+    PoseFrame::EstimationMethod estimator;
+    if (FLAGS_sm_pose_estimator == "artoolkit") {
+      estimator = PoseFrame::EstimationMethod::COLOR_ARTOOLKIT;
+    } else {
+      estimator = PoseFrame::EstimationMethod::COLOR_ARTOOLKIT_AND_DEPTH_ICP;
+    }
+
+    pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
+      kRegularGridResolution, kInitialWorldFromGrid, estimator);
+  } else if (FLAGS_sm_pose_estimator == "icp") {
+
+    // Put the camera at the center of the front face of the cube.
+    const SimilarityTransform kInitialWorldFromGrid =
+      SimilarityTransform(kRegularGridVoxelSize) *
+      SimilarityTransform(Vector3f(-0.5f * kRegularGridResolution.x,
+        -0.5f * kRegularGridResolution.y, -kRegularGridResolution.z));
+
+    // y up
+    const EuclideanTransform kInitialDepthCameraFromWorld =
+      EuclideanTransform::fromMatrix(
+        Matrix4f::lookAt(
+          { 0, 0, camera_params.depth.depth_range.minimum() },
+          Vector3f{ 0 },
+          Vector3f{ 0, 1, 0 }.normalized()
+        )
+      );
+
+    PoseFrame initial_pose_frame = {};
+    initial_pose_frame.method = PoseFrame::EstimationMethod::FIXED_INITIAL;
+    initial_pose_frame.depth_camera_from_world = kInitialDepthCameraFromWorld;
+    initial_pose_frame.color_camera_from_world =
+      camera_params.ConvertToColorCameraFromWorld(
+        kInitialDepthCameraFromWorld);
+
+    pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
+      kRegularGridResolution, kInitialWorldFromGrid,
+      PoseFrame::EstimationMethod::DEPTH_ICP, initial_pose_frame);
+  } else if (FLAGS_sm_pose_estimator == "precomputed") {
+    // Put the origin at the center of the cube.
+    const SimilarityTransform kInitialWorldFromGrid =
+      SimilarityTransform(kRegularGridVoxelSize) *
+      SimilarityTransform(Vector3f(-0.5f * kRegularGridResolution.x,
+        -0.5f * kRegularGridResolution.y, -0.5f * kRegularGridResolution.z));
+
+    std::vector<PoseFrame> pose_history = LoadPoseHistory(FLAGS_sm_pose_file,
+      camera_params.depth_from_color);
+    if (pose_history.size() == 0) {
+      fprintf(stderr, "Error: failed to load pose history from %s\n",
+        FLAGS_sm_pose_file.c_str());
+      return 1;
+    }
+
+    pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
+      kRegularGridResolution, kInitialWorldFromGrid, pose_history);
+  }
+
   ControlWidget control_widget;
   control_widget.setGeometry(50, 50, 150, 150);
   control_widget.show();
 
   MainWidget main_widget;
-  main_widget.SetPipeline(&pipeline);
+  main_widget.SetPipeline(pipeline.get());
   main_widget.show();
 
   const int window_width = 2240;
@@ -123,7 +171,7 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
   main_widget.move(x, y);
   main_widget.resize(window_width, window_height);
 
-  MainController controller(&rgbd_input, &pipeline,
+  MainController controller(&rgbd_input, pipeline.get(),
     &control_widget, &main_widget);
   return app.exec();
 }
@@ -257,7 +305,7 @@ int MultiStaticCameraMain(int argc, char* argv[]) {
   const SimilarityTransform initial_world_from_grid =
     MakeWorldFromGrid(p0.xyz, kRegularGridSideLength, kRegularGridResolution);
 
-  StaticMultiCameraPipeline pipeline(camera_params, camera_poses,
+  MultiStaticCameraPipeline pipeline(camera_params, camera_poses,
                                      Vector3i{kRegularGridResolution},
                                      initial_world_from_grid, kMaxTSDFValue);
   if (FLAGS_ms_use_gui) {
@@ -284,7 +332,7 @@ int MultiStaticCameraMain(int argc, char* argv[]) {
       controller.inputs_.emplace_back(RgbdInput::InputType::FILE,
                                       rgbd_stream_filenames[i].c_str());
     }
-    controller.smc_pipeline_ = &pipeline;
+    controller.msc_pipeline_ = &pipeline;
     return app.exec();
   } else {
     std::vector<RgbdInput> inputs;
