@@ -23,7 +23,7 @@
 #include "libcgt/core/vecmath/EuclideanTransform.h"
 #include "libcgt/cuda/DeviceArray2D.h"
 
-#include "artoolkit_pose_estimator.h"
+#include "aruco_pose_estimator.h"
 #include "regular_grid_tsdf.h"
 #include "rgbd_camera_parameters.h"
 #include "depth_processor.h"
@@ -46,7 +46,7 @@ class RegularGridFusionPipeline : public QObject {
     const Vector3i& grid_resolution,
     const SimilarityTransform& world_from_grid,
     PoseFrame::EstimationMethod pose_estimation_method =
-        PoseFrame::EstimationMethod::COLOR_ARTOOLKIT_AND_DEPTH_ICP,
+        PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP,
     const PoseFrame& initial_pose = PoseFrame{} );
 
   // Construct a pipeline from an existing pose history.
@@ -157,7 +157,7 @@ class RegularGridFusionPipeline : public QObject {
   const int kMaxSuccessiveFailuresBeforeReset = 1000;
   int num_successive_failures_ = 0;
   ProjectivePointPlaneICP icp_;
-  ARToolkitPoseEstimator color_pose_estimator_;
+  ArucoPoseEstimator aruco_pose_estimator_;
 
   PoseFrame::EstimationMethod pose_estimation_method_;
 

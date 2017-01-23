@@ -45,11 +45,11 @@ DEFINE_string(sm_input_type, "openni2",
 DEFINE_string(sm_input_args, "",
   "OPTIONAL for single moving mode: "
   "If sm_input_type is \"file\", the path to a .rgbd file.");
-DEFINE_string(sm_pose_estimator, "artoolkit_icp",
+DEFINE_string(sm_pose_estimator, "color_aruco_and_depth_icp",
   "REQUIRED for single moving mode: "
-  "Pose estimator. Valid options: \"artoolkit\", \"icp\", \"artoolkit_icp\", "
-  "or \"file\". If \"file\", sm_pose_file is required. "
-  "Default: \"artoolkit_icp\".");
+  "Pose estimator. Valid options: \"color_aruco\", \"depth_icp\", "
+  "\"color_aruco_and_depth_icp\", or \"file\". "
+  "If \"file\", sm_pose_file is required.");
 DEFINE_string(sm_pose_file, "",
   "Filename for precomputed pose path.");
 
@@ -92,8 +92,8 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
 
   std::unique_ptr<RegularGridFusionPipeline> pipeline;
 
-  if (FLAGS_sm_pose_estimator == "artoolkit" ||
-    FLAGS_sm_pose_estimator == "artoolkit_icp") {
+  if (FLAGS_sm_pose_estimator == "color_aruco" ||
+    FLAGS_sm_pose_estimator == "color_aruco_and_depth_icp") {
     // Put the origin at the center of the cube.
     const SimilarityTransform kInitialWorldFromGrid =
       SimilarityTransform(kRegularGridVoxelSize) *
@@ -101,15 +101,15 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
         -0.5f * kRegularGridResolution.y, -0.5f * kRegularGridResolution.z));
 
     PoseFrame::EstimationMethod estimator;
-    if (FLAGS_sm_pose_estimator == "artoolkit") {
-      estimator = PoseFrame::EstimationMethod::COLOR_ARTOOLKIT;
+    if (FLAGS_sm_pose_estimator == "color_aruco") {
+      estimator = PoseFrame::EstimationMethod::COLOR_ARUCO;
     } else {
-      estimator = PoseFrame::EstimationMethod::COLOR_ARTOOLKIT_AND_DEPTH_ICP;
+      estimator = PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP;
     }
 
     pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
       kRegularGridResolution, kInitialWorldFromGrid, estimator);
-  } else if (FLAGS_sm_pose_estimator == "icp") {
+  } else if (FLAGS_sm_pose_estimator == "depth_icp") {
 
     // Put the camera at the center of the front face of the cube.
     const SimilarityTransform kInitialWorldFromGrid =

@@ -6,11 +6,7 @@ set_property( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # gflags
-if( EXISTS "third_party/gflags/CMakeLists.txt" )
-    add_subdirectory( "third_party/gflags" )
-else()
-    find_package( gflags REQUIRED )
-endif()
+add_subdirectory( "third_party/gflags" )
 
 # OpenCV
 find_package( OpenCV REQUIRED )
@@ -47,11 +43,6 @@ find_package( Qt5Core )
 find_package( Qt5OpenGL )
 find_package( Qt5Widgets )
 
-# ARToolkit
-# TODO: package ARToolkit under third_party.
-include_directories( c:/opt/local/include )
-link_directories( c:/opt/local/lib )
-
 # libcgt
 find_package( libcgt REQUIRED )
 # BUG(CMake): target_include_directories doesn't work with CUDA.
@@ -81,20 +72,7 @@ target_link_libraries( depth_fusion
     cgt_gl
     cgt_camera_wrappers
     cgt_opencv_interop
-    cgt_qt_interop
-	# HACK: ARToolkit
-    debug ARd
-    debug AR2d
-    debug ARICPd
-    debug ARgsub_lited
-    debug ARMultid
-    debug ARUtild
-    optimized AR
-    optimized AR2
-    optimized ARgsub_lite
-    optimized ARICP
-    optimized ARMulti
-    optimized ARUtil
+    cgt_qt_interop	
 )
 
 # TODO: make this build on Linux. It might need -l GL.

@@ -26,7 +26,8 @@ struct CameraParameters {
   using Intrinsics = libcgt::core::cameras::Intrinsics;
 
   Vector2i resolution;
-  Intrinsics intrinsics; // y axis points up.
+  // GL-style intrinsics. y-up, half-integer pixel centers.
+  Intrinsics intrinsics;
   std::vector<float> dist_coeffs;
   Array2D<Vector2f> undistortion_map; // y axis points up.
 

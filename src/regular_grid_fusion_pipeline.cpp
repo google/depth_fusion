@@ -25,6 +25,10 @@ using libcgt::core::vecmath::SimilarityTransform;
 
 namespace {
 
+// TODO: also specify a board configuration.
+const char* kArucoDetectorParamsFilename = "../res/detector_params.yaml";
+constexpr bool kDoFusion = true;
+
 std::vector<PoseFrame>::const_iterator FindPoseFrame(
   const std::vector<PoseFrame>& pose_history,
   int64_t timestamp_ns) {
@@ -70,7 +74,7 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
        camera_params.depth.depth_range),
 
-  color_pose_estimator_(camera_params.color, "../res/cube_64mm.dat") {
+  aruco_pose_estimator_(camera_params.color, kArucoDetectorParamsFilename) {
   if (pose_estimation_method_ == PoseFrame::EstimationMethod::DEPTH_ICP) {
     assert(initial_pose.method == PoseFrame::EstimationMethod::FIXED_INITIAL);
   } else {
@@ -108,7 +112,7 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
        camera_params.depth.depth_range),
 
-  color_pose_estimator_(camera_params.color, "../res/cube_64mm.dat"),
+  aruco_pose_estimator_(camera_params.color, kArucoDetectorParamsFilename),
 
   precomputed_pose_history_(pose_history) {
 }
@@ -155,7 +159,6 @@ void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
                                                    bool depth_updated) {
   assert (color_updated || depth_updated);
 
-  bool do_fusion = true;
   PipelineDataType data_changed = PipelineDataType::NONE;
 
   bool color_pose_updated = false;
@@ -223,7 +226,7 @@ void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
     }
   } else {
     if (pose_estimation_method_ ==
-      PoseFrame::EstimationMethod::COLOR_ARTOOLKIT) {
+      PoseFrame::EstimationMethod::COLOR_ARUCO) {
       if (color_updated) {
         color_pose_updated = UpdatePoseWithColorCamera();
       }
@@ -233,7 +236,7 @@ void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
         depth_pose_updated = UpdatePoseWithDepthCamera();
       }
     } else if (pose_estimation_method_ ==
-      PoseFrame::EstimationMethod::COLOR_ARTOOLKIT_AND_DEPTH_ICP) {
+      PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP) {
       // If both color and depth are updated, run them in order.
       if (color_updated && depth_updated) {
         if (input_buffer_.color_timestamp_ns <
@@ -254,7 +257,7 @@ void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
 
   if (color_pose_updated || depth_pose_updated) {
     data_changed |= PipelineDataType::CAMERA_POSE;
-    if (depth_pose_updated && do_fusion) {
+    if (depth_pose_updated && kDoFusion) {
       Fuse();
       Raycast();
       data_changed |= PipelineDataType::TSDF;
@@ -283,15 +286,15 @@ RegularGridFusionPipeline::TSDFWorldFromGridTransform() const {
 bool RegularGridFusionPipeline::UpdatePoseWithColorCamera()
 {
   assert (pose_estimation_method_ ==
-    PoseFrame::EstimationMethod::COLOR_ARTOOLKIT ||
+    PoseFrame::EstimationMethod::COLOR_ARUCO ||
     pose_estimation_method_ ==
-    PoseFrame::EstimationMethod::COLOR_ARTOOLKIT_AND_DEPTH_ICP);
-  ARToolkitPoseEstimator::Result result =
-    color_pose_estimator_.EstimatePose(input_buffer_.color_bgr_ydown);
+    PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP);
+  ArucoPoseEstimator::Result result =
+    aruco_pose_estimator_.EstimatePose(input_buffer_.color_bgr_ydown);
   if (result.valid)
   {
     PoseFrame pose_frame;
-    pose_frame.method = PoseFrame::EstimationMethod::COLOR_ARTOOLKIT;
+    pose_frame.method = PoseFrame::EstimationMethod::COLOR_ARUCO;
     pose_frame.frame_index = input_buffer_.color_frame_index;
     pose_frame.timestamp_ns = input_buffer_.color_timestamp_ns;
     pose_frame.color_camera_from_world = inverse(result.world_from_camera);
@@ -309,7 +312,7 @@ bool RegularGridFusionPipeline::UpdatePoseWithDepthCamera() {
   assert (pose_estimation_method_ ==
     PoseFrame::EstimationMethod::DEPTH_ICP ||
     pose_estimation_method_ ==
-    PoseFrame::EstimationMethod::COLOR_ARTOOLKIT_AND_DEPTH_ICP);
+    PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP);
 
   // ICP can only estimate relative pose, not absolute. I.e., it needs a
   // previous pose before it can estimate the current pose.
@@ -322,7 +325,7 @@ bool RegularGridFusionPipeline::UpdatePoseWithDepthCamera() {
       pose_history_.push_back(initial_pose_);
       return true;
     } else if (pose_estimation_method_ ==
-      PoseFrame::EstimationMethod::COLOR_ARTOOLKIT_AND_DEPTH_ICP ) {
+      PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP ) {
       return false;
     }
   }

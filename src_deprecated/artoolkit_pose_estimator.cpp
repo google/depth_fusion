@@ -196,7 +196,7 @@ ARToolkitPoseEstimator::Result ARToolkitPoseEstimator::EstimatePose(
   } else {
     printf("ARToolkit: failed.\n");
   }
-  printf( "ARToolkit: pose estimation took %lld ms\n",
-    libcgt::core::time::dtMS( t0, t1 ) );
+  printf("ARToolkit: pose estimation took %lld ms\n",
+    libcgt::core::time::dtMS(t0, t1));
   return result;
 }

@@ -26,7 +26,9 @@ struct PoseFrame {
     FIXED_INITIAL = 1,
 
     COLOR_ARTOOLKIT = 16,
-    COLOR_ARUCO = 17,
+    COLOR_ARTOOLKIT_PLUS = 17,
+
+    COLOR_ARUCO = 32,
 
     DEPTH_ICP = 128,
 
