@@ -79,6 +79,8 @@ class MultiStaticCameraPipeline {
   // ----- Intermediate buffers -----
   // Incoming raw depth frame in meters.
   std::vector<DeviceArray2D<float>> depth_meters_;
+    // Incoming raw depth, smoothed.
+  std::vector<DeviceArray2D<float>> smoothed_depth_meters_;
   // Incoming raw depth, undistorted.
   std::vector<DeviceArray2D<float>> undistorted_depth_meters_;
 

@@ -16,6 +16,9 @@
 #include <unordered_map>
 
 #include "libcgt/core/common/ArrayUtils.h"
+#include <gflags/gflags.h>
+
+DEFINE_double(min_sdf_diff, 0.001, "Minimum SDF difference to issue a triangle.");
 
 using libcgt::core::arrayutils::readViewOf;
 using libcgt::core::vecmath::SimilarityTransform;
@@ -532,7 +535,7 @@ void MarchingCubes(Array3DReadView<TSDF> grid, float max_tsdf_value,
   vector<Vector3f>& positions_list_out,
   vector<Vector3f>& normals_list_out) {
   const float iso_level = 0.0f;
-  const float min_sdf_diff = 1e-3f;
+  const float min_sdf_diff = FLAGS_min_sdf_diff;
   positions_list_out.clear();
   normals_list_out.clear();
 

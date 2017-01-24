@@ -21,6 +21,13 @@
 
 #include "camera_math.cuh"
 
+DEFINE_int32(box_filter_radius, 2, "Box filter radius.");
+DEFINE_int32(smooth_depthmap_kernel_radius, 2,
+             "Smooth depthmap kernel radius.");
+DEFINE_double(smooth_depthmap_delta_z_threshold, 0.04,
+              "Smooth depthmap kernel radius.");
+DECLARE_string(depth_filter);
+
 using libcgt::cuda::Event;
 using libcgt::cuda::threadmath::threadSubscript2DGlobal;
 using libcgt::cuda::contains;
@@ -85,6 +92,31 @@ void UndistortKernel(cudaTextureObject_t raw_depth,
 
     undistorted[xy] = tex2D<float>(raw_depth, xy2.x, xy2.y);
   }
+}
+
+__global__
+void BoxFilterKernel(KernelArray2D<const float> undistorted,
+                     KernelArray2D<float> smoothed,
+                     const int radius) {
+  int2 xy = threadSubscript2DGlobal();
+  float s = 0.0f;
+  int count = 0;
+  int2 nxy;
+  const int r = radius;
+  for (int y = xy.y - r; y <= xy.y + r; ++y) {
+    for (int x = xy.x - r; x <= xy.x + r; ++x) {
+      nxy.x = x;
+      nxy.y = y;
+      if (contains(Rect2i(undistorted.size()), nxy)) {
+        if (undistorted[nxy] > 0.0) {
+          s += undistorted[nxy];
+          count++;
+        }
+      }
+    }
+  }
+  if (count > 0) smoothed[xy] = s / count;
+  else smoothed[xy] = undistorted[xy];
 }
 
 __global__
@@ -187,16 +219,24 @@ void DepthProcessor::Smooth(DeviceArray2D<float>& raw_depth,
   dim3 block(16, 16);
   dim3 grid = numBins2D(make_int2(raw_depth.size()), block);
 
-  Event e;
-  e.recordStart();
-  SmoothDepthMapKernel<<<grid, block>>>(
-    raw_depth.readView(),
-    make_float2(depth_range_.leftRight()),
-    kernel_radius_,
-    delta_z_squared_threshold_,
-    smoothed_depth.writeView());
-  float dtMS = e.recordStopSyncAndGetMillisecondsElapsed();
-  printf("DepthProcessor::Smooth took %f ms\n", dtMS);
+  if (FLAGS_depth_filter == "box") {
+    Event e;
+    e.recordStart();
+    BoxFilterKernel<<<grid, block>>>(
+      raw_depth.readView(), smoothed_depth.writeView(), FLAGS_box_filter_radius);
+    float dtMS = e.recordStopSyncAndGetMillisecondsElapsed();
+    printf("DepthProcessor::Box filter took %f ms\n", dtMS);
+  } else if (FLAGS_depth_filter == "bilateral") {
+    e.recordStart();
+    SmoothDepthMapKernel<<<grid, block>>>(
+      raw_depth.readView(),
+      make_float2(depth_range_.leftRight()),
+      FLAGS_smooth_depthmap_kernel_radius,
+      FLAGS_smooth_depthmap_delta_z_threshold * FLAGS_smooth_depthmap_delta_z_threshold,
+      smoothed_depth.writeView());
+    float dtMS = e.recordStopSyncAndGetMillisecondsElapsed();
+    printf("DepthProcessor::Smooth took %f ms\n", dtMS);
+  }
 }
 
 void DepthProcessor::EstimateNormals(DeviceArray2D<float>& smoothed_depth,

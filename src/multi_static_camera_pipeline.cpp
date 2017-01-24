@@ -15,6 +15,10 @@
 
 #include "libcgt/core/common/ArrayUtils.h"
 
+DEFINE_string(depth_filter, "box",
+              "Depth filter used, options are box or bilateral. "
+              "Empty string disables input depthmap filtering.");
+
 using libcgt::core::arrayutils::cast;
 using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::SimilarityTransform;
@@ -37,6 +41,7 @@ MultiStaticCameraPipeline::MultiStaticCameraPipeline(
     depth_meters_.emplace_back(camera_params[i].depth.resolution);
     depth_camera_undistort_maps_.emplace_back(
       camera_params[i].depth.resolution);
+    smoothed_depth_meters_.emplace_back(camera_params[i].depth.resolution);
     undistorted_depth_meters_.emplace_back(camera_params[i].depth.resolution);
     input_buffers_.emplace_back(camera_params[i].color.resolution,
                                 camera_params[i].depth.resolution);
@@ -74,9 +79,17 @@ void MultiStaticCameraPipeline::NotifyInputUpdated(int camera_index,
   depth_meters_[camera_index].copyFromHost(
     input_buffers_[camera_index].depth_meters);
 
-  depth_processor_.Undistort(
-    depth_meters_[camera_index], depth_camera_undistort_maps_[camera_index],
-    undistorted_depth_meters_[camera_index]);
+  if (!FLAGS_depth_filter.empty()) {
+    depth_processor_.Smooth(depth_meters_[camera_index],
+                            smoothed_depth_meters_[camera_index]);
+    depth_processor_.Undistort(
+      smoothed_depth_meters_[camera_index], depth_camera_undistort_maps_[camera_index],
+      undistorted_depth_meters_[camera_index]);
+  } else {
+    depth_processor_.Undistort(
+      depth_meters_[camera_index], depth_camera_undistort_maps_[camera_index],
+      undistorted_depth_meters_[camera_index]);
+  }
 }
 
 InputBuffer& MultiStaticCameraPipeline::GetInputBuffer(int camera_index) {

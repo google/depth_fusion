@@ -46,9 +46,6 @@ class DepthProcessor {
 
   const Vector4f depth_intrinsics_flpp_;
   const Range1f depth_range_;
-  const int kernel_radius_ = 2;
-  const float delta_z_squared_threshold_ = 0.04f;  // 40 mm for Kinect.
-
 };
 
 #endif  // DEPTH_PROCESSOR_H

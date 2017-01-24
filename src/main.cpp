@@ -53,8 +53,31 @@ DEFINE_string(sm_pose_estimator, "color_aruco_and_depth_icp",
 DEFINE_string(sm_pose_file, "",
   "Filename for precomputed pose path.");
 
+
 DEFINE_bool(ms_use_gui, true,
   "Set true to visualize with GUI, false to run in batch mode.");
+DEFINE_string(ms_camera_calibration_file, "",
+              "Filename of text file containing description of camera pose "
+              "and intrinsic parameters. See code for format details.");
+DEFINE_string(ms_rgbd_base_dir, "",
+              "Base directory where rgbd files are located.");
+DEFINE_string(ms_rgbd_sequence_suffix, "",
+              "Suffix after first \"_\" in camera name to be added "
+              "when generating the rgdb filenames to be loaded.");
+
+DEFINE_double(ms_max_tsdf_value_scale, 32.0,
+              "Maximum TSDF value used in the voxel grid. "
+              "The value is measured in multiples of voxel side lengths.");
+DEFINE_int32(ms_grid_resolution, 512,
+             "Resolution of voxel grid used for fusion.");
+DEFINE_double(ms_grid_side_length, 2.0f,
+              "Side length of the regular grid used for fusion.");
+DEFINE_double(ms_grid_distance_z, 2.5, "Distance in z coordinate of the grid.");
+DEFINE_double(ms_grid_offset_x, 0.0, "Offset of the grid in x coordinate from the optical axis.");
+DEFINE_double(ms_grid_offset_y, 0.0, "Offset of the grid in y coordinate from the optical axis..");
+DEFINE_double(ms_depth_range_min, 0.1, "Minimum depth considered in meters.");
+DEFINE_double(ms_depth_range_max, 10.0, "Maximum depth considered in meters.");
+
 
 int SingleMovingCameraMain(int argc, char* argv[]) {
 
@@ -187,16 +210,20 @@ using libcgt::opencv_interop::undistortRectifyMap;
 using libcgt::opencv_interop::toCVSize;
 
 // HACK: this only makes a depth camera.
-RGBDCameraParameters makeRGBDCameraParameters(double focalLength,
+RGBDCameraParameters makeRGBDCameraParameters(
+  double focalLengthX, double focalLengthY,
   double principalPointX, double principalPointY,
-  double distortionR2, double distortionR4) {
+  double distortionR2, double distortionR4,
+  int image_width, int image_height) {
   RGBDCameraParameters params;
 
-  params.depth.resolution = { 512, 424 };
-  params.depth.depth_range = Range1f::fromMinMax(0.1f, 10.0f);
+  params.depth.resolution = { image_width, image_height };
+  params.depth.depth_range = Range1f::fromMinMax(FLAGS_ms_depth_range_min, FLAGS_ms_depth_range_max);
 
-  cv::Mat_<double> cvCameraMatrix = makeCameraMatrix(focalLength,
+  cv::Mat_<double> cvCameraMatrix = makeCameraMatrix(focalLengthX,
     principalPointX, principalPointY);
+  cvCameraMatrix(1, 1) = focalLengthY;
+
   cv::Size2i cvImageSize = toCVSize(params.depth.resolution);
 
   cv::Mat_<double> dist_coeffs = cv::Mat_<double>::zeros(1, 4);
@@ -239,41 +266,54 @@ SimilarityTransform MakeWorldFromGrid(const Vector3f& center,
 int MultiStaticCameraMain(int argc, char* argv[]) {
   QApplication app(argc, argv);
 
-  std::vector<std::string> rgbd_stream_filenames = {
-    "d:/tmp/multicam/kinect0083_new/filtered_frames.rgbd",
-    "d:/tmp/multicam/kinect0134_new/filtered_frames.rgbd",
-    "d:/tmp/multicam/kinect0142_new/filtered_frames.rgbd"
-  };
+  int num_cameras = 0;
 
-  const int kNumCameras = 3;
-  std::vector<RGBDCameraParameters> camera_params;
-  camera_params.push_back(makeRGBDCameraParameters(365.183, 255.097, 207.695,
-    0.0745901, -0.189055));
-  camera_params.push_back(makeRGBDCameraParameters(366.009, 251.421, 205.132,
-    0.0641811, -0.179726));
-  camera_params.push_back(makeRGBDCameraParameters(365.712, 254.596, 205.857,
-    0.0678888, -0.185925));
+  ifstream model_cameras_file(FLAGS_ms_camera_calibration_file.c_str());
 
-  std::vector<EuclideanTransform> camera_poses(3);
-  camera_poses[0].translation = Vector3f{-0.015828f, 0.014736f, -0.0128686f};
-  camera_poses[1].translation = Vector3f{1.77081f, -0.0100862f, 0.828459f};
-  camera_poses[2].translation = Vector3f{0.934717f, 7.526e-05f, 0.2477f};
+  model_cameras_file >> num_cameras;
+  printf("Reading %d cameras...\n", num_cameras);
+  std::vector<std::string> rgbd_stream_filenames(num_cameras);
+  std::vector<RGBDCameraParameters> camera_params(num_cameras);
+  std::vector<EuclideanTransform> camera_poses(num_cameras);
 
-  Vector3f axisAngle;
-  Quat4f q;
+  for (int i = 0; i < num_cameras; i++) {
+    string id;
+    model_cameras_file >> id;
+    printf("Processing camera %s\n", id.c_str());
 
-  axisAngle = Vector3f{-0.00690718f, -0.0101686f, -0.00351523f};
-  camera_poses[0].rotation = Matrix3f::rotation(axisAngle);
+    string base_dir = FLAGS_ms_rgbd_base_dir;
+    // HACK: won't work in Windows.
+    if (base_dir[base_dir.size() -1] != '/') base_dir += '/';
+    rgbd_stream_filenames[i] = base_dir + id.substr(0, id.find('_')) +
+                               FLAGS_ms_rgbd_sequence_suffix +
+                               id.substr(id.find('_')) + ".rgbd";
+    printf("file: %s\n", rgbd_stream_filenames[i].c_str());
 
-  axisAngle = Vector3f{-0.0148537f, 0.919529f, -0.000168047f};
-  camera_poses[1].rotation = Matrix3f::rotation(axisAngle);
+    double focal_length_x, focal_length_y;
+    double principal_point_x, principal_point_y;
+    double radial_distortion_r2, radial_distortion_r4;
+    int image_width, image_height;
 
-  axisAngle = Vector3f{-0.0496128f, 0.417153f, -0.00555608f};
-  camera_poses[2].rotation = Matrix3f::rotation(axisAngle);
+    model_cameras_file >> focal_length_x >> focal_length_y 
+                       >> principal_point_x >> principal_point_y
+                       >> radial_distortion_r2 >> radial_distortion_r4
+                       >> image_width >> image_height;
+    camera_params[i] = 
+        makeRGBDCameraParameters(focal_length_x, focal_length_y,
+                                 principal_point_x, principal_point_y,
+                                 radial_distortion_r2, radial_distortion_r4,
+                                 image_width, image_height);
 
-  EuclideanTransform rot180(Matrix3f::rotateX(static_cast<float>(M_PI)));
 
-  for(int i = 0; i < 3; ++i) {
+    Vector3f translation, axis_angle;
+    model_cameras_file >> translation.x >> translation.y >> translation.z;
+    model_cameras_file >> axis_angle.x >> axis_angle.y >> axis_angle.z;
+    camera_poses[i].translation = translation;
+    camera_poses[i].rotation = Matrix3f::rotation(axis_angle);
+  }
+
+
+  for(int i = 0; i < num_cameras; ++i) {
     // Convert translation from SfM convention (R * (x[0:2] - x[3] * c)) to
     // standard convention: [R, t]: R * x[0:2] + t.
     camera_poses[i].translation =
@@ -285,9 +325,10 @@ int MultiStaticCameraMain(int argc, char* argv[]) {
   // HACK: where to place grid.
   // Pick a pixel from camera 1.
   const Vector2f xy0{
-    camera_params[1].depth.resolution.x / 2.0f,
-    camera_params[1].depth.resolution.x / 4.0f};
-  const float z0 = 2.5f;
+    camera_params[1].depth.resolution.x * (0.5f + static_cast<float>(FLAGS_ms_grid_offset_x)),
+    camera_params[1].depth.resolution.y * (0.5f + static_cast<float>(FLAGS_ms_grid_offset_y))};
+
+  const float z0 = FLAGS_ms_grid_distance_z;
   PerspectiveCamera center_camera(
     camera_poses[1],
     camera_params[1].depth.intrinsics,
@@ -298,10 +339,10 @@ int MultiStaticCameraMain(int argc, char* argv[]) {
   Vector4f p0 = center_camera.worldFromScreen(xy0,
     z0, camera_params[1].depth.resolution);
 
-  constexpr int kRegularGridResolution = 512;
-  constexpr float kRegularGridSideLength = 2.0f;
-  constexpr float kVoxelSize = kRegularGridSideLength / kRegularGridResolution;
-  constexpr float kMaxTSDFValue = 32 * kVoxelSize;
+  const int kRegularGridResolution = FLAGS_ms_grid_resolution;
+  const float kRegularGridSideLength = FLAGS_ms_grid_side_length;
+  const float kVoxelSize = kRegularGridSideLength / kRegularGridResolution;
+  const float kMaxTSDFValue = FLAGS_ms_max_tsdf_value_scale * kVoxelSize;
   const SimilarityTransform initial_world_from_grid =
     MakeWorldFromGrid(p0.xyz, kRegularGridSideLength, kRegularGridResolution);
 

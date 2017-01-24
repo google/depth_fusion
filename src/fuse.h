@@ -30,6 +30,9 @@ void FuseKernel(
   float2 zMinMax,
   float4x4 camera_from_world,
   KernelArray2D<const float> depth_data,
-  KernelArray3D<TSDF> regular_grid);
+  KernelArray3D<TSDF> regular_grid,
+  int depth_var_radius,
+  float depth_var_param,
+  float weight_multiplier);
 
 #endif // FUSE_H

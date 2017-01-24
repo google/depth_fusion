@@ -23,6 +23,10 @@
 #include "marching_cubes.h"
 #include "raycast.h"
 
+DEFINE_int32(depth_var_radius, 3, "Depth var radius");
+DEFINE_double(depth_var_param, 0.001, "Depth var param");
+DEFINE_int32(weight_multiplier, 10, "Weight multiplier");
+
 using libcgt::core::vecmath::SimilarityTransform;
 using libcgt::core::vecmath::inverse;
 using libcgt::cuda::Event;
@@ -95,7 +99,10 @@ void RegularGridTSDF::Fuse(const Vector4f& depth_camera_flpp,
     make_float2(depth_range.left(), depth_range.right()),
     make_float4x4(camera_from_world),
     depth_data.readView(),
-    device_grid_.writeView());
+    device_grid_.writeView(),
+    FLAGS_depth_var_radius,
+    FLAGS_depth_var_param,
+    FLAGS_weight_multiplier);
   float msElapsed = e.recordStopSyncAndGetMillisecondsElapsed();
 
   printf("Fuse() took : %f ms\n", msElapsed);
