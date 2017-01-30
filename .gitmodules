@@ -7,3 +7,6 @@
 [submodule "third_party/cpp11-range"]
 	path = third_party/cpp11-range
 	url = https://github.com/harrism/cpp11-range
+[submodule "third_party/Eigen"]
+	path = third_party/Eigen
+	url = https://github.com/RLovelett/eigen
