@@ -16,10 +16,11 @@
 
 #include <vector_types.h>
 
+#include "libcgt/cuda/float4x4.h"
 #include "libcgt/cuda/KernelArray2D.h"
 #include "libcgt/cuda/KernelArray3D.h"
-#include "libcgt/cuda/float4x4.h"
 
+#include "calibrated_posed_depth_camera.h"
 #include "regular_grid_tsdf.h"
 
 __global__
@@ -27,9 +28,23 @@ void FuseKernel(
   float4x4 world_from_grid,
   float max_tsdf_value,
   float4 flpp,
-  float2 zMinMax,
+  float2 depth_min_max,
   float4x4 camera_from_world,
-  KernelArray2D<const float> depth_data,
+  KernelArray2D<const float> depth_map,
+  KernelArray3D<TSDF> regular_grid);
+
+// TODO: replace CalibratedPosedDepthCamera with something in __constant__
+// memory.
+__global__
+void FuseMultipleKernel(
+  float4x4 world_from_grid,
+  float max_tsdf_value,
+  CalibratedPosedDepthCamera depth_camera0,
+  CalibratedPosedDepthCamera depth_camera1,
+  CalibratedPosedDepthCamera depth_camera2,
+  KernelArray2D<const float> depth_map0,
+  KernelArray2D<const float> depth_map1,
+  KernelArray2D<const float> depth_map2,
   KernelArray3D<TSDF> regular_grid);
 
 #endif // FUSE_H

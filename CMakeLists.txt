@@ -53,9 +53,13 @@ file( GLOB_RECURSE HEADERS src/*.h src/*.inl src/*.cuh )
 file( GLOB_RECURSE SOURCES_CPP src/*.cpp )
 file( GLOB_RECURSE SOURCES_CU src/*.cu )
 
-# TODO: fast math:
-# LIST(APPEND CUDA_NVCC_FLAGS --compiler-options -fno-strict-aliasing -lineinfo -use_fast_math -Xptxas -dlcm=cg)
-# LIST(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_20,code=sm_20)
+# CUDA flags
+set( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -lineinfo -use_fast_math )
+set( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-gencode arch=compute_60,code=sm_60" )
+
+# TODO: Look into -Xptxas -dlcm=cg
+# TODO: Look into gcc -f no-strict-aliasing
+
 cuda_add_executable( depth_fusion ${HEADERS} ${SOURCES_CPP} ${SOURCES_CU} )
 set_property( TARGET depth_fusion PROPERTY CXX_STANDARD 11 )
 target_compile_definitions( depth_fusion

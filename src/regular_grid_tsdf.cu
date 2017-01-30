@@ -15,6 +15,8 @@
 
 #include <cassert>
 
+#include <gflags/gflags.h>
+
 #include "libcgt/cuda/Event.h"
 #include "libcgt/cuda/MathUtils.h"
 #include "libcgt/cuda/VecmathConversions.h"
@@ -26,6 +28,8 @@
 using libcgt::core::vecmath::SimilarityTransform;
 using libcgt::core::vecmath::inverse;
 using libcgt::cuda::Event;
+
+DECLARE_bool(collect_perf);
 
 // VoxelSize() = world_from_grid_.scale.
 RegularGridTSDF::RegularGridTSDF(const Vector3i& resolution,
@@ -78,7 +82,7 @@ Vector3f RegularGridTSDF::SideLengths() const {
 void RegularGridTSDF::Fuse(const Vector4f& depth_camera_flpp,
   const Range1f& depth_range,
   const Matrix4f& camera_from_world,
-  DeviceArray2D<float>& depth_data) {
+  const DeviceArray2D<float>& depth_data) {
 
   dim3 block_dim(16, 16, 1);
   dim3 grid_dim = libcgt::cuda::math::numBins2D(
@@ -86,8 +90,15 @@ void RegularGridTSDF::Fuse(const Vector4f& depth_camera_flpp,
     block_dim
   );
 
+  // TODO: move these into class or use Performance Collector class.
+  static float msTotal = 0.0f;
+  static int nIterationsTotal = 0;
   Event e;
-  e.recordStart();
+
+  if (FLAGS_collect_perf) {
+    e.recordStart();
+  }
+
   FuseKernel<<<grid_dim, block_dim>>>(
     make_float4x4(world_from_grid_.asMatrix()),
     max_tsdf_value_,
@@ -96,9 +107,58 @@ void RegularGridTSDF::Fuse(const Vector4f& depth_camera_flpp,
     make_float4x4(camera_from_world),
     depth_data.readView(),
     device_grid_.writeView());
-  float msElapsed = e.recordStopSyncAndGetMillisecondsElapsed();
 
-  printf("Fuse() took : %f ms\n", msElapsed);
+  if (FLAGS_collect_perf) {
+    float msElapsed = e.recordStopSyncAndGetMillisecondsElapsed();
+
+    msTotal += msElapsed;
+    ++nIterationsTotal;
+
+    printf("Fuse() took: %f ms\n", msElapsed);
+
+    printf("%d average: %f\n", nIterationsTotal, msTotal / nIterationsTotal);
+    printf("3x average: %f\n", 3.0f * msTotal / nIterationsTotal);
+  }
+}
+
+void RegularGridTSDF::FuseMultiple(
+  const std::vector<CalibratedPosedDepthCamera>& depth_cameras,
+  const std::vector<DeviceArray2D<float>>& depth_maps) {
+  dim3 block_dim(16, 16, 1);
+  dim3 grid_dim = libcgt::cuda::math::numBins2D(
+    { device_grid_.width(), device_grid_.height() },
+    block_dim
+  );
+
+  // TODO: move these into class or use Performance Collector class.
+  static float msTotal = 0.0f;
+  static int nIterationsTotal = 0;
+  Event e;
+
+  if (FLAGS_collect_perf) {
+    e.recordStart();
+  }
+
+  FuseMultipleKernel<<<grid_dim, block_dim>>>(
+    make_float4x4(world_from_grid_.asMatrix()),
+    max_tsdf_value_,
+    depth_cameras[0],
+    depth_cameras[1],
+    depth_cameras[2],
+    depth_maps[0].readView(),
+    depth_maps[1].readView(),
+    depth_maps[2].readView(),
+    device_grid_.writeView());
+
+  if (FLAGS_collect_perf) {
+    float msElapsed = e.recordStopSyncAndGetMillisecondsElapsed();
+
+    msTotal += msElapsed;
+    ++nIterationsTotal;
+
+    printf("FuseMultiple() took: %f ms, %d-run average: %f\n",
+      msElapsed, nIterationsTotal, msTotal / nIterationsTotal);
+  }
 }
 
 void RegularGridTSDF::Raycast(const Vector4f& depth_camera_flpp,
@@ -115,7 +175,11 @@ void RegularGridTSDF::Raycast(const Vector4f& depth_camera_flpp,
   Vector4f eye = world_from_camera * Vector4f(0, 0, 0, 1);
 
   Event e;
-  e.recordStart();
+
+  if (FLAGS_collect_perf) {
+    e.recordStart();
+  }
+
   RaycastKernel<<<grid_dim, block_dim>>>(
     device_grid_.readView(),
     make_float4x4(grid_from_world_.asMatrix()),
@@ -127,14 +191,16 @@ void RegularGridTSDF::Raycast(const Vector4f& depth_camera_flpp,
     world_points_out.writeView(),
     world_normals_out.writeView()
   );
-  float msElapsed = e.recordStopSyncAndGetMillisecondsElapsed();
 
-  printf("Raycast() took: %f ms\n", msElapsed);
+  if (FLAGS_collect_perf) {
+    float msElapsed = e.recordStopSyncAndGetMillisecondsElapsed();
+    printf("Raycast() took: %f ms\n", msElapsed);
+  }
 }
 
 TriangleMesh RegularGridTSDF::Triangulate() const {
   Array3D<TSDF> host_grid(Resolution());
-  device_grid_.copyToHost(host_grid);
+  copy(device_grid_, host_grid.writeView());
 
   std::vector<Vector3f> positions;
   std::vector<Vector3f> normals;

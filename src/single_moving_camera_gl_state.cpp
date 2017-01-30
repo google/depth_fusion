@@ -190,16 +190,16 @@ void SingleMovingCameraGLState::Render(const PerspectiveCamera& free_camera) {
   if (notZero(
     changed_pipeline_data_type_ & PipelineDataType::SMOOTHED_DEPTH)) {
     auto mr0 = smoothed_depth_tex_.map();
-    pipeline_->SmoothedDepthMeters().copyToArray(mr0.array());
+    copy(pipeline_->SmoothedDepthMeters(), mr0.array());
     auto mr1 = smoothed_incoming_normals_tex_.map();
-    pipeline_->SmoothedIncomingNormals().copyToArray(mr1.array());
+    copy(pipeline_->SmoothedIncomingNormals(), mr1.array());
   }
 
   if (notZero(
     changed_pipeline_data_type_ & PipelineDataType::CAMERA_POSE)) {
     {
       auto mr = pose_estimation_vis_tex_.map();
-      pipeline_->PoseEstimationVisualization().copyToArray(mr.array());
+      copy(pipeline_->PoseEstimationVisualization(), mr.array());
     }
 
     tracked_rgb_camera_.updatePositions(
@@ -211,7 +211,7 @@ void SingleMovingCameraGLState::Render(const PerspectiveCamera& free_camera) {
   if (notZero(
     changed_pipeline_data_type_ & PipelineDataType::RAYCAST_NORMALS)) {
     auto mr = raycasted_normals_tex_.map();
-    pipeline_->RaycastNormals().copyToArray( mr.array() );
+    copy(pipeline_->RaycastNormals(), mr.array());
   }
 
   DrawInputsAndIntermediates();
@@ -351,11 +351,11 @@ void SingleMovingCameraGLState::DrawFullscreenRaycast() {
     free_camera_world_positions_, free_camera_world_normals_);
   {
     auto mr = free_camera_world_positions_tex_.map();
-    free_camera_world_positions_.copyToArray(mr.array());
+    copy(free_camera_world_positions_, mr.array());
   }
   {
     auto mr = free_camera_world_normals_tex_.map();
-    free_camera_world_normals_.copyToArray(mr.array());
+    copy(free_camera_world_normals_, mr.array());
   }
 
   glDisable(GL_DEPTH_TEST);

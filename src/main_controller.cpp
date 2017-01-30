@@ -33,8 +33,6 @@ MainController::MainController(
   input_(input),
   pipeline_(pipeline),
   main_widget_(main_widget) {
-  assert(pipeline_ != nullptr);
-
   read_input_timer_ = new QTimer(this);
   read_input_timer_->setInterval(0);
   QObject::connect(read_input_timer_, &QTimer::timeout,
@@ -68,7 +66,7 @@ void MainController::OnReadInput() {
       read_input_timer_->stop();
     }
   } else if (FLAGS_mode == "multi_static") {
-    for (size_t i = 0; i < inputs_.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(inputs_.size()); ++i) {
       bool color_updated;
       bool depth_updated;
       inputs_[i].read(&(msc_pipeline_->GetInputBuffer(i)),
@@ -83,7 +81,7 @@ void MainController::OnReadInput() {
     //if(depth_updated) {
     {
       // TODO: pipeline should emit that TSDF has changed.
-      msc_pipeline_->Fuse();
+      msc_pipeline_->FuseMultiple();
       main_widget_->GetMultiStaticCameraGLState()->NotifyTSDFUpdated();
     }
 

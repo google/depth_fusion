@@ -190,19 +190,19 @@ void MultiStaticCameraGLState::Render(const PerspectiveCamera& free_camera) {
   }
 
   // TODO: notify that input has changed
-  for(size_t i = 0; i < raw_depth_textures_.size(); ++i) {
+  for(int i = 0; i < static_cast<int>(raw_depth_textures_.size()); ++i) {
     raw_depth_textures_[i].texture().set(
       pipeline_->GetInputBuffer(i).depth_meters);
 
     {
       auto mr = undistorted_depth_textures_[i].map();
-      pipeline_->GetUndistortedDepthMap(i).copyToArray(mr.array());
+      copy(pipeline_->GetUndistortedDepthMap(i), mr.array());
     }
   }
 
   // TODO: only when positions have changed, which in this case, is never.
   // UpdateCameraFrusta()
-  for(size_t i = 0; i < depth_camera_frusta_.size(); ++i) {
+  for(int i = 0; i < static_cast<int>(depth_camera_frusta_.size()); ++i) {
     depth_camera_frusta_[i].updatePositions(pipeline_->GetDepthCamera(i));
   }
 
@@ -334,11 +334,11 @@ void MultiStaticCameraGLState::DrawFullscreenRaycast() {
       free_camera_world_positions_, free_camera_world_normals_ );
     {
       auto mr = free_camera_world_positions_tex_.map();
-      free_camera_world_positions_.copyToArray(mr.array());
+      copy(free_camera_world_positions_, mr.array());
     }
     {
       auto mr = free_camera_world_normals_tex_.map();
-      free_camera_world_normals_.copyToArray(mr.array());
+      copy(free_camera_world_normals_, mr.array());
     }
     tsdf_is_dirty_ = false;
   }

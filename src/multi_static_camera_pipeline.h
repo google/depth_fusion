@@ -19,14 +19,17 @@
 #include "libcgt/core/vecmath/Vector2i.h"
 #include "libcgt/core/vecmath/Vector3i.h"
 #include "libcgt/core/vecmath/EuclideanTransform.h"
+#include "libcgt/cuda/DeviceArray1D.h"
 #include "libcgt/cuda/DeviceArray2D.h"
+#include "libcgt/cuda/float4x4.h"
 
-#include "regular_grid_tsdf.h"
-#include "rgbd_camera_parameters.h"
+#include "calibrated_posed_depth_camera.h"
 #include "depth_processor.h"
-#include "projective_point_plane_icp.h"
 #include "input_buffer.h"
 #include "pose_frame.h"
+#include "projective_point_plane_icp.h"
+#include "regular_grid_tsdf.h"
+#include "rgbd_camera_parameters.h"
 
 class MultiStaticCameraPipeline {
 
@@ -64,6 +67,8 @@ class MultiStaticCameraPipeline {
 
   // Update the regular grid with the latest image.
   void Fuse();
+
+  void FuseMultiple();
 
   void Raycast(const PerspectiveCamera& camera,
                DeviceArray2D<float4>& world_points,

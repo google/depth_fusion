@@ -21,9 +21,12 @@
 #include "libcgt/core/vecmath/SimilarityTransform.h"
 #include "libcgt/core/vecmath/Vector3i.h"
 #include "libcgt/core/vecmath/Vector4f.h"
+#include "libcgt/cuda/DeviceArray1D.h"
 #include "libcgt/cuda/DeviceArray2D.h"
 #include "libcgt/cuda/DeviceArray3D.h"
 
+#include "calibrated_posed_depth_camera.h"
+#include <vector>
 #include "tsdf.h"
 
 class RegularGridTSDF {
@@ -48,11 +51,14 @@ public:
 
   void Reset();
 
-  // TODO(jiawen): const correct
   void Fuse(const Vector4f& depth_camera_flpp,  // Depth camera intrinsics.
     const Range1f& depth_camera_range,          // Depth camera range.
     const Matrix4f& depth_camera_from_world,    // Depth camera pose.
-    DeviceArray2D<float>& depth_data);          // Depth frame, in meters.
+    const DeviceArray2D<float>& depth_data);    // Depth frame, in meters.
+
+  void FuseMultiple(
+    const std::vector<CalibratedPosedDepthCamera>& depth_cameras,
+    const std::vector<DeviceArray2D<float>>& depth_maps);
 
   void Raycast(const Vector4f& depth_camera_flpp,  // Depth camera intrinsics.
     const Matrix4f& world_from_camera,             // Depth camera pose.

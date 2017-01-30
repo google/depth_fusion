@@ -168,7 +168,7 @@ void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
     data_changed |= PipelineDataType::INPUT_COLOR;
   }
   if (depth_updated) {
-    depth_meters_.copyFromHost(input_buffer_.depth_meters);
+    copy(input_buffer_.depth_meters.readView(), depth_meters_);
     depth_processor_.Smooth(depth_meters_, smoothed_depth_meters_);
     depth_processor_.EstimateNormals(smoothed_depth_meters_,
                                      incoming_camera_normals_);

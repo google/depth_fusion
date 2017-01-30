@@ -13,11 +13,22 @@
 // limitations under the License.
 #include "multi_static_camera_pipeline.h"
 
+#include <vector_functions.h>
+
 #include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/cuda/VecmathConversions.h"
 
 using libcgt::core::arrayutils::cast;
 using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::SimilarityTransform;
+
+namespace {
+
+inline __host__ __device__ float4 make_float4(float2 xy, float2 zw) {
+  return ::make_float4(xy.x, xy.y, zw.x, zw.y);
+}
+
+}
 
 MultiStaticCameraPipeline::MultiStaticCameraPipeline(
   const std::vector<RGBDCameraParameters>& camera_params,
@@ -41,8 +52,8 @@ MultiStaticCameraPipeline::MultiStaticCameraPipeline(
     input_buffers_.emplace_back(camera_params[i].color.resolution,
                                 camera_params[i].depth.resolution);
 
-    depth_camera_undistort_maps_[i].copyFromHost(
-      cast<float2>(camera_params[i].depth.undistortion_map.readView()));
+    copy(cast<float2>(camera_params[i].depth.undistortion_map.readView()),
+      depth_camera_undistort_maps_[i]);
   }
 }
 
@@ -71,8 +82,8 @@ void MultiStaticCameraPipeline::Reset() {
 void MultiStaticCameraPipeline::NotifyInputUpdated(int camera_index,
                                                    bool color_updated,
                                                    bool depth_updated) {
-  depth_meters_[camera_index].copyFromHost(
-    input_buffers_[camera_index].depth_meters);
+  copy(input_buffers_[camera_index].depth_meters.readView(),
+    depth_meters_[camera_index]);
 
   depth_processor_.Undistort(
     depth_meters_[camera_index], depth_camera_undistort_maps_[camera_index],
@@ -118,10 +129,27 @@ void MultiStaticCameraPipeline::Fuse() {
   }
 }
 
+void MultiStaticCameraPipeline::FuseMultiple() {
+  std::vector<CalibratedPosedDepthCamera> c(3);
+  for (size_t i = 0; i < depth_meters_.size(); ++i) {
+    c[i].flpp = make_float4(
+      make_float2(camera_params_[i].depth.intrinsics.focalLength),
+      make_float2(camera_params_[i].depth.intrinsics.principalPoint)
+    );
+    c[i].depth_min_max = make_float2(
+      camera_params_[i].depth.depth_range.leftRight()
+    );
+    c[i].camera_from_world = make_float4x4(
+      depth_camera_poses_cfw_[i].asMatrix()
+    );
+  }
+
+  regular_grid_.FuseMultiple(c, undistorted_depth_meters_);
+}
+
 void MultiStaticCameraPipeline::Raycast(const PerspectiveCamera& camera,
                                         DeviceArray2D<float4>& world_points,
-                                        DeviceArray2D<float4>& world_normals)
-{
+                                        DeviceArray2D<float4>& world_normals) {
   Intrinsics intrinsics = camera.intrinsics(world_points.size());
   Vector4f flpp{ intrinsics.focalLength, intrinsics.principalPoint };
 

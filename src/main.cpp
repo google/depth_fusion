@@ -32,6 +32,7 @@
 using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::SimilarityTransform;
 
+DEFINE_bool(collect_perf, false, "Collect performance statistics.");
 DEFINE_string(mode, "single_moving",
   "Mode to run the app in. Either \"single_moving\" or \"multi_static\"." );
 DEFINE_string(sm_calibration_dir, "",
@@ -347,8 +348,8 @@ int MultiStaticCameraMain(int argc, char* argv[]) {
     while (true) {
       bool rgb_updated;
       bool depth_updated;
-      for(size_t i = 0; i < inputs.size(); ++i) {
-        printf("Processing frame %zu of %zu\n", i, inputs.size());
+      for(int i = 0; i < static_cast<int>(inputs.size()); ++i) {
+        printf("Processing frame %d of %zu\n", i, inputs.size());
         pipeline.Reset();
 
         inputs[i].read(&pipeline.GetInputBuffer(i),
@@ -380,7 +381,9 @@ int main(int argc, char* argv[]) {
   } else if (FLAGS_mode == "multi_static") {
     return MultiStaticCameraMain(argc, argv);
   } else {
-    printf("Invalid mode: %s\n", FLAGS_mode.c_str());
+    printf("Invalid mode: %s.\n"
+      "mode must be \"single_moving\" or \"multi_static\"\n",
+      FLAGS_mode.c_str());
     return 1;
   }
 }
