@@ -15,13 +15,18 @@
 
 #include <cassert>
 
+#include <gflags/gflags.h>
+
 #include "libcgt/core/common/ArrayUtils.h"
 #include "libcgt/core/imageproc/ColorMap.h"
 
+using libcgt::core::arrayutils::flipYInPlace;
 using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::inverse;
 using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::SimilarityTransform;
+
+DECLARE_bool(adaptive_raycast);
 
 namespace {
 
@@ -74,7 +79,9 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
        camera_params.depth.depth_range),
 
-  aruco_pose_estimator_(camera_params.color, kArucoDetectorParamsFilename) {
+  aruco_pose_estimator_(aruco_cube_fiducial_, camera_params.color,
+    kArucoDetectorParamsFilename),
+  aruco_vis_(camera_params.color.resolution) {
   if (pose_estimation_method_ == PoseFrame::EstimationMethod::DEPTH_ICP) {
     assert(initial_pose.method == PoseFrame::EstimationMethod::FIXED_INITIAL);
   } else {
@@ -112,7 +119,8 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
        camera_params.depth.depth_range),
 
-  aruco_pose_estimator_(camera_params.color, kArucoDetectorParamsFilename),
+  aruco_pose_estimator_(aruco_cube_fiducial_, camera_params.color,
+    kArucoDetectorParamsFilename),
 
   precomputed_pose_history_(pose_history) {
 }
@@ -127,6 +135,10 @@ void RegularGridFusionPipeline::Reset() {
 const RGBDCameraParameters&
 RegularGridFusionPipeline::GetCameraParameters() const {
   return camera_params_;
+}
+
+const CubeFiducial& RegularGridFusionPipeline::GetArucoCubeFiducial() const {
+  return aruco_cube_fiducial_;
 }
 
 PerspectiveCamera RegularGridFusionPipeline::ColorCamera() const {
@@ -257,6 +269,9 @@ void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
 
   if (color_pose_updated || depth_pose_updated) {
     data_changed |= PipelineDataType::CAMERA_POSE;
+    if (color_pose_updated) {
+      data_changed |= PipelineDataType::POSE_ESTIMATION_VIS;
+    }
     if (depth_pose_updated && kDoFusion) {
       Fuse();
       Raycast();
@@ -271,6 +286,11 @@ void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
 
 InputBuffer& RegularGridFusionPipeline::GetInputBuffer() {
   return input_buffer_;
+}
+
+Array2DReadView<uint8x3 >
+RegularGridFusionPipeline::GetColorPoseEstimatorVisualization() const {
+  return aruco_vis_;
 }
 
 Box3f RegularGridFusionPipeline::TSDFGridBoundingBox() const {
@@ -290,7 +310,8 @@ bool RegularGridFusionPipeline::UpdatePoseWithColorCamera()
     pose_estimation_method_ ==
     PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP);
   ArucoPoseEstimator::Result result =
-    aruco_pose_estimator_.EstimatePose(input_buffer_.color_bgr_ydown);
+    aruco_pose_estimator_.EstimatePose(input_buffer_.color_bgr_ydown,
+      aruco_vis_);
   if (result.valid)
   {
     PoseFrame pose_frame;
@@ -303,6 +324,9 @@ bool RegularGridFusionPipeline::UpdatePoseWithColorCamera()
         pose_frame.color_camera_from_world);
 
     pose_history_.push_back(pose_frame);
+
+    // Flip visualization upside down.
+    flipYInPlace(aruco_vis_.writeView());
   }
 
   return result.valid;
@@ -383,11 +407,20 @@ void RegularGridFusionPipeline::Fuse() {
 
 void RegularGridFusionPipeline::Raycast() {
   last_raycast_pose_ = pose_history_.back();
-  regular_grid_.Raycast(
-    depth_intrinsics_flpp_,
-    inverse(last_raycast_pose_.depth_camera_from_world).asMatrix(),
-    world_points_, world_normals_
-  );
+
+  if (FLAGS_adaptive_raycast) {
+    regular_grid_.AdaptiveRaycast(
+      depth_intrinsics_flpp_,
+      inverse(last_raycast_pose_.depth_camera_from_world).asMatrix(),
+      world_points_, world_normals_
+    );
+  } else {
+    regular_grid_.Raycast(
+      depth_intrinsics_flpp_,
+      inverse(last_raycast_pose_.depth_camera_from_world).asMatrix(),
+      world_points_, world_normals_
+    );
+  }
 }
 
 void RegularGridFusionPipeline::Raycast(const PerspectiveCamera& camera,
@@ -396,11 +429,19 @@ void RegularGridFusionPipeline::Raycast(const PerspectiveCamera& camera,
   Intrinsics intrinsics = camera.intrinsics(world_points.size());
   Vector4f flpp{intrinsics.focalLength, intrinsics.principalPoint};
 
-  regular_grid_.Raycast(
-    flpp,
-    camera.worldFromCamera().asMatrix(),
-    world_points, world_normals
-  );
+  if (FLAGS_adaptive_raycast) {
+    regular_grid_.AdaptiveRaycast(
+      flpp,
+      camera.worldFromCamera().asMatrix(),
+      world_points, world_normals
+    );
+  } else {
+    regular_grid_.Raycast(
+      flpp,
+      camera.worldFromCamera().asMatrix(),
+      world_points, world_normals
+    );
+  }
 }
 
 TriangleMesh RegularGridFusionPipeline::Triangulate() const {

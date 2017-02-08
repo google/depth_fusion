@@ -37,6 +37,7 @@
 #include "libcgt/GL/GL_45/drawables/WireframeBox.h"
 
 #include "pipeline_data_type.h"
+#include "aruco/cube_fiducial.h"
 
 class RegularGridFusionPipeline;
 
@@ -68,6 +69,7 @@ class SingleMovingCameraGLState : public QObject {
   void LoadShaders();
 
   void DrawWorldAxes();
+  void DrawCubeFiducial();
   void DrawUnprojectedPointCloud();
   void DrawFullscreenRaycast();
   void DrawCameraFrustaAndTSDFGrid();
@@ -87,6 +89,7 @@ class SingleMovingCameraGLState : public QObject {
   Frustum tracked_depth_camera_;
   WireframeBox tsdf_bbox_;
   PointCloud xy_coords_;
+  CubeFiducialDrawable cube_fiducial_;
 
   GLTexture2D color_texture_;
   GLTexture2D color_tracking_vis_texture_;
@@ -107,12 +110,11 @@ class SingleMovingCameraGLState : public QObject {
   libcgt::cuda::gl::Texture2D free_camera_world_normals_tex_;
 
   // ----- GL helper objects -----
-  std::unordered_map<std::string, GLSeparableProgram> programs_;
-
   GLProgramPipeline draw_color_;
   GLProgramPipeline draw_single_color_;
   GLProgramPipeline draw_texture_;
   GLProgramPipeline unproject_point_cloud_;
+  GLProgramPipeline visualize_texcoords_;
 
   GLSamplerObject nearest_sampler_;
   GLSamplerObject linear_sampler_;

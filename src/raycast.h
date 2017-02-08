@@ -28,9 +28,22 @@ void RaycastKernel(KernelArray3D<const TSDF> regular_grid,
   float4x4 grid_from_world, // in meters
   float4x4 world_from_grid, // in meters
   float max_tsdf_value,
-  float4 flpp, // depth camera intrinsics
-  float4x4 world_from_camera, // depth camera pose
-  float3 eye_world, // depth camera eye in world coords
+  float4 flpp, // camera intrinsics
+  float4x4 world_from_camera, // camera pose
+  float3 eye_world, // camera eye in world coords
+  KernelArray2D<float4> world_depth_out,
+  KernelArray2D<float4> world_normal_out
+);
+
+__global__
+void AdaptiveRaycastKernel(KernelArray3D<const TSDF> regular_grid,
+  float4x4 grid_from_world, // in meters
+  float4x4 world_from_grid, // in meters
+  float max_tsdf_value,
+  float voxels_per_meter,
+  float4 flpp, // camera intrinsics
+  float4x4 world_from_camera, // camera pose
+  float3 eye_world, // camera eye in world coords
   KernelArray2D<float4> world_depth_out,
   KernelArray2D<float4> world_normal_out
 );

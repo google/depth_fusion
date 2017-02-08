@@ -21,37 +21,44 @@ using libcgt::core::arrayutils::copy;
 using libcgt::cuda::gl::Texture2D;
 
 namespace {
-  const std::string kDrawTextureVSSrc =
-#include "shaders/draw_texture.vs.glsl"
-    ;
-  const std::string kDrawColorVSSrc =
-#include "shaders/draw_color.vs.glsl"
-    ;
-  const std::string kPositionOnlyVSSrc =
+const std::string kPositionTexcoordVSSrc =
+#include "shaders/position_texcoord.vs.glsl"
+;
+const std::string kPositionColorVSSrc =
+#include "shaders/position_color.vs.glsl"
+;
+const std::string kPositionOnlyVSSrc =
 #include "shaders/position_only.vs.glsl"
-    ;
-  const std::string kDrawColorFSSrc =
+;
+const std::string kDrawColorFSSrc =
 #include "shaders/draw_color.fs.glsl"
-    ;
-  const std::string kUnprojectPointCloudVSSrc =
+;
+const std::string kUnprojectPointCloudVSSrc =
 #include "shaders/unproject_point_cloud.vs.glsl"
-    ;
-  const std::string kDrawTextureFSSrc =
+;
+const std::string kDrawTextureFSSrc =
 #include "shaders/draw_texture.fs.glsl"
-    ;
-  const std::string kDrawColorDiscardTransparentFSSrc =
+;
+const std::string kDrawColorDiscardTransparentFSSrc =
 #include "shaders/draw_color_discard_transparent.fs.glsl"
-    ;
-  const std::string kDrawSingleColorFSSrc =
+;
+const std::string kDrawSingleColorFSSrc =
 #include "shaders/draw_single_color.fs.glsl"
-    ;
+;
+const std::string kVisualizeTexcoordsFSSrc =
+#include "shaders/visualize_texcoords.fs.glsl"
+;
 }  // namespace
 
-// TODO: shaders can be shared GL state
+// TODO: shaders can be shared between GL state objects.
+
+namespace {
 
 const bool kDrawUnprojectedPointCloud = true;
 const bool kDrawFullscreenRaycast = true;
 const int kFullscreenRaycastDownsampleFactor = 4;
+
+}
 
 SingleMovingCameraGLState::SingleMovingCameraGLState(
   RegularGridFusionPipeline* pipeline, QOpenGLWidget* parent) :
@@ -90,7 +97,8 @@ SingleMovingCameraGLState::SingleMovingCameraGLState(
   free_camera_world_normals_tex_(
     GLTexture2D(pipeline->GetCameraParameters().depth.resolution,
       GLImageInternalFormat::RGBA32F),
-    Texture2D::MapFlags::WRITE_DISCARD) {
+    Texture2D::MapFlags::WRITE_DISCARD),
+  cube_fiducial_(pipeline_->GetArucoCubeFiducial()) {
   LoadShaders();
 
   tracked_rgb_camera_.updateColor({ 1, 0, 0, 1 });
@@ -113,15 +121,9 @@ SingleMovingCameraGLState::SingleMovingCameraGLState(
   	}
   }
 
-  GLTexture::SwizzleTarget swizzle_rrr1[4] =
-  {
-    GLTexture::SwizzleTarget::RED,
-    GLTexture::SwizzleTarget::RED,
-    GLTexture::SwizzleTarget::RED,
-    GLTexture::SwizzleTarget::ONE
-  };
-  depth_texture_.setSwizzleRGBA(swizzle_rrr1);
-  smoothed_depth_tex_.texture().setSwizzleRGBA(swizzle_rrr1);
+  depth_texture_.setSwizzleRGBAlpha(GLTexture::SwizzleTarget::RED);
+  smoothed_depth_tex_.texture().setSwizzleRGBAlpha(
+    GLTexture::SwizzleTarget::RED);
 
   nearest_sampler_.setMinMagFilterModes(GLTextureFilterMode::NEAREST);
   nearest_sampler_.setWrapModes(GLWrapMode::CLAMP_TO_EDGE);
@@ -182,6 +184,15 @@ void SingleMovingCameraGLState::Render(const PerspectiveCamera& free_camera) {
     color_texture_.set(input_buffer.color_rgb);
   }
 
+  // TODO: don't update this is color visualization is not on.
+  if (notZero(
+    changed_pipeline_data_type_ & PipelineDataType::POSE_ESTIMATION_VIS)) {
+    printf("Updating color pose estimation vis\n");
+    color_tracking_vis_texture_.set(
+      pipeline_->GetColorPoseEstimatorVisualization(),
+      GLImageFormat::BGR);
+  }
+
   if (notZero(
     changed_pipeline_data_type_ & PipelineDataType::INPUT_DEPTH)) {
     depth_texture_.set(input_buffer.depth_meters);
@@ -216,14 +227,16 @@ void SingleMovingCameraGLState::Render(const PerspectiveCamera& free_camera) {
 
   DrawInputsAndIntermediates();
   DrawWorldAxes();
+  DrawCubeFiducial();
   if (kDrawUnprojectedPointCloud) {
     DrawUnprojectedPointCloud();
   }
   DrawCameraFrustaAndTSDFGrid();
+
   if (kDrawFullscreenRaycast) {
     if (camera_moved ||
       notZero(changed_pipeline_data_type_ & PipelineDataType::TSDF)) {
-    DrawFullscreenRaycast();
+      DrawFullscreenRaycast();
     }
   }
 
@@ -231,50 +244,48 @@ void SingleMovingCameraGLState::Render(const PerspectiveCamera& free_camera) {
 }
 
 void SingleMovingCameraGLState::LoadShaders() {
-  programs_.emplace("drawColorVS",
-    GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
-                    kDrawColorVSSrc.c_str()));
-  programs_.emplace("positionOnlyVS",
-    GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
-                    kPositionOnlyVSSrc.c_str()));
-  programs_.emplace("drawTextureVS",
-    GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
-                    kDrawTextureVSSrc.c_str()));
-  programs_.emplace("unprojectPointCloudVS",
-    GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
-                    kUnprojectPointCloudVSSrc.c_str()));
+  auto positionColorVS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::VERTEX_SHADER, kPositionColorVSSrc.c_str());
+  auto positionOnlyVS = std::make_shared<GLSeparableProgram>(
+		GLSeparableProgram::Type::VERTEX_SHADER, kPositionOnlyVSSrc.c_str());
+	auto positionTexcoordVS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::VERTEX_SHADER, kPositionTexcoordVSSrc.c_str());
+	auto unprojectPointCloudVS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::VERTEX_SHADER,
+    kUnprojectPointCloudVSSrc.c_str());
 
-  programs_.emplace("drawColorFS",
-    GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
-                    kDrawColorFSSrc.c_str()));
-  programs_.emplace("drawColorDiscardTransparentFS",
-    GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
-                    kDrawColorDiscardTransparentFSSrc.c_str()));
-  programs_.emplace("drawSingleColorFS",
-    GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
-                    kDrawSingleColorFSSrc.c_str()));
-  programs_.emplace("drawTextureFS",
-    GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
-                    kDrawTextureFSSrc.c_str()));
+	auto drawColorFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawColorFSSrc.c_str());
+	auto drawColorDiscardTransparentFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER,
+    kDrawColorDiscardTransparentFSSrc.c_str());
+	auto drawSingleColorFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawSingleColorFSSrc.c_str());
+	auto drawTextureFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawTextureFSSrc.c_str());
+  auto visualizeTexcoordsFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER,
+    kVisualizeTexcoordsFSSrc.c_str());
 
-  draw_color_.attachProgram(programs_["drawColorVS"]);
-  draw_color_.attachProgram(programs_["drawColorFS"]);
+  draw_color_.attachProgram(positionColorVS);
+  draw_color_.attachProgram(drawColorFS);
 
-  draw_single_color_.attachProgram(programs_["positionOnlyVS"]);
-  draw_single_color_.attachProgram(programs_["drawSingleColorFS"]);
+  draw_single_color_.attachProgram(positionOnlyVS);
+  draw_single_color_.attachProgram(drawSingleColorFS);
 
-  draw_texture_.attachProgram(programs_["drawTextureVS"]);
-  draw_texture_.attachProgram(programs_["drawTextureFS"]);
+  draw_texture_.attachProgram(positionTexcoordVS);
+  draw_texture_.attachProgram(drawTextureFS);
 
-  unproject_point_cloud_.attachProgram(programs_["unprojectPointCloudVS"]);
-  unproject_point_cloud_.attachProgram(
-    programs_["drawColorDiscardTransparentFS"]);
+  unproject_point_cloud_.attachProgram(unprojectPointCloudVS);
+  unproject_point_cloud_.attachProgram(drawColorDiscardTransparentFS);
+
+  visualize_texcoords_.attachProgram(positionTexcoordVS);
+  visualize_texcoords_.attachProgram(visualizeTexcoordsFS);
 }
 
-
 void SingleMovingCameraGLState::DrawWorldAxes() {
-  GLSeparableProgram& vs = programs_["drawColorVS"];
-  vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
+  draw_color_.vertexProgram()->setUniformMatrix4f(0,
+    free_camera_.viewProjectionMatrix());
   draw_color_.bind();
 
   world_axes_.draw();
@@ -282,9 +293,22 @@ void SingleMovingCameraGLState::DrawWorldAxes() {
   GLProgramPipeline::unbindAll();
 }
 
+void SingleMovingCameraGLState::DrawCubeFiducial() {
+  draw_texture_.vertexProgram()->setUniformMatrix4f(0,
+      free_camera_.viewProjectionMatrix());
+    draw_texture_.bind();
+
+    cube_fiducial_.texture().bind();
+    nearest_sampler_.bind();
+    cube_fiducial_.draw();
+
+    cube_fiducial_.texture().unbind();
+    GLProgramPipeline::unbindAll();
+}
+
 void SingleMovingCameraGLState::DrawCameraFrustaAndTSDFGrid() {
-  GLSeparableProgram& vs = programs_["drawColorVS"];
-  vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
+  draw_color_.vertexProgram()->setUniformMatrix4f(0,
+    free_camera_.viewProjectionMatrix());
   draw_color_.bind();
 
   tracked_rgb_camera_.draw();
@@ -305,23 +329,23 @@ void SingleMovingCameraGLState::DrawUnprojectedPointCloud() {
   const int kColorTextureUnit = 1;
 
   unproject_point_cloud_.bind();
-  GLSeparableProgram& vs = programs_["unprojectPointCloudVS"];
-  vs.setUniformMatrix4f(kFreeCameraFromWorldLocation,
+  auto vs = unproject_point_cloud_.vertexProgram();
+  vs->setUniformMatrix4f(kFreeCameraFromWorldLocation,
     free_camera_.viewProjectionMatrix());
-  vs.setUniformVector4f(kDepthCameraFLPPLocation,
+  vs->setUniformVector4f(kDepthCameraFLPPLocation,
     {
       pipeline_->GetCameraParameters().depth.intrinsics.focalLength,
       pipeline_->GetCameraParameters().depth.intrinsics.principalPoint
     }
   );
-  vs.setUniformVector2f(kDepthCameraRangeMinMaxLocation,
+  vs->setUniformVector2f(kDepthCameraRangeMinMaxLocation,
     pipeline_->GetCameraParameters().depth.depth_range.leftRight());
-  vs.setUniformMatrix4f(kDepthWorldFromCameraLocation,
+  vs->setUniformMatrix4f(kDepthWorldFromCameraLocation,
     pipeline_->DepthCamera().worldFromCamera().asMatrix());
 
   depth_texture_.bind(kDepthTextureUnit);
   nearest_sampler_.bind(kDepthTextureUnit);
-  vs.setUniformInt(kDepthTextureLocation, kDepthTextureUnit);
+  vs->setUniformInt(kDepthTextureLocation, kDepthTextureUnit);
 
   xy_coords_.draw();
 
@@ -361,11 +385,10 @@ void SingleMovingCameraGLState::DrawFullscreenRaycast() {
   glDisable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
 
-  GLSeparableProgram& vs = programs_["drawTextureVS"];
-  vs.setUniformMatrix4f(0, Matrix4f::identity());
-  GLSeparableProgram& fs = programs_["drawTextureFS"];
-  fs.setUniformInt(0, 0); // sampler
-  fs.setUniformMatrix4f(1, normalsToRGBA());
+  draw_texture_.vertexProgram()->setUniformMatrix4f(0, Matrix4f::identity());
+  auto fs = draw_texture_.fragmentProgram();
+  fs->setUniformInt(0, 0); // sampler
+  fs->setUniformMatrix4f(1, normalsToRGBA());
   draw_texture_.bind();
 
   free_camera_world_normals_tex_.texture().bind(0);
@@ -391,18 +414,17 @@ void SingleMovingCameraGLState::DrawRemappedTextures(
   glDisable(GL_DEPTH_TEST);
   Rect2i vp = GLUtilities::getViewport();
 
-  GLSeparableProgram& vs = programs_["drawTextureVS"];
-  vs.setUniformMatrix4f(0, Matrix4f::identity());
-  GLSeparableProgram& fs = programs_["drawTextureFS"];
-  fs.setUniformInt(0, 0); // sampler
   draw_texture_.bind();
+  draw_texture_.vertexProgram()->setUniformMatrix4f(0, Matrix4f::identity());
+  auto fs = draw_texture_.fragmentProgram();
+  fs->setUniformInt(0, 0); // sampler
 
   Vector2i sz = floorToInt(
     textures[0].texture->size() * textures[0].size_scale);
   Rect2i current_rect{ { 0, 0 }, sz };
   for (const auto& tex : textures) {
     GLUtilities::setViewport(current_rect);
-     fs.setUniformMatrix4f(1, tex.color_transform);
+     fs->setUniformMatrix4f(1, tex.color_transform);
     tex.texture->bind(0);
     input_buffer_textured_rect_.draw();
     current_rect = translate(current_rect, current_rect.dx());
@@ -431,7 +453,7 @@ void SingleMovingCameraGLState::DrawInputsAndIntermediates() {
       &color_texture_,
       Vector2f{ 0.5f, 0.5f },
       Matrix4f::identity()
-  }
+    }
   );
 
   textures.push_back(

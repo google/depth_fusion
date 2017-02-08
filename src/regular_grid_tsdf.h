@@ -60,8 +60,13 @@ public:
     const std::vector<CalibratedPosedDepthCamera>& depth_cameras,
     const std::vector<DeviceArray2D<float>>& depth_maps);
 
-  void Raycast(const Vector4f& depth_camera_flpp,  // Depth camera intrinsics.
-    const Matrix4f& world_from_camera,             // Depth camera pose.
+  void AdaptiveRaycast( const Vector4f& camera_flpp,  // Camera intrinsics
+    const Matrix4f& world_from_camera,                // Camera pose.
+    DeviceArray2D<float4>& world_points_out,
+    DeviceArray2D<float4>& world_normals_out );
+
+  void Raycast(const Vector4f& camera_flpp,  // Camera intrinsics
+    const Matrix4f& world_from_camera,       // Camera pose.
     DeviceArray2D<float4>& world_points_out,
     DeviceArray2D<float4>& world_normals_out);
 

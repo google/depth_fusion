@@ -13,22 +13,19 @@
 // limitations under the License.
 #include "multi_static_camera_pipeline.h"
 
+#include <gflags/gflags.h>
+
 #include <vector_functions.h>
 
 #include "libcgt/core/common/ArrayUtils.h"
 #include "libcgt/cuda/VecmathConversions.h"
+#include "libcgt/cuda/VectorFunctions.h"
 
 using libcgt::core::arrayutils::cast;
 using libcgt::core::cameras::Intrinsics;
 using libcgt::core::vecmath::SimilarityTransform;
 
-namespace {
-
-inline __host__ __device__ float4 make_float4(float2 xy, float2 zw) {
-  return ::make_float4(xy.x, xy.y, zw.x, zw.y);
-}
-
-}
+DECLARE_bool(adaptive_raycast);
 
 MultiStaticCameraPipeline::MultiStaticCameraPipeline(
   const std::vector<RGBDCameraParameters>& camera_params,
@@ -153,11 +150,21 @@ void MultiStaticCameraPipeline::Raycast(const PerspectiveCamera& camera,
   Intrinsics intrinsics = camera.intrinsics(world_points.size());
   Vector4f flpp{ intrinsics.focalLength, intrinsics.principalPoint };
 
-  regular_grid_.Raycast(
-    flpp,
-    camera.worldFromCamera().asMatrix(),
-    world_points, world_normals
-  );
+  if (FLAGS_adaptive_raycast) {
+    regular_grid_.AdaptiveRaycast(
+      flpp,
+      camera.worldFromCamera().asMatrix(),
+      world_points,
+      world_normals
+    );
+  } else {
+    regular_grid_.Raycast(
+      flpp,
+      camera.worldFromCamera().asMatrix(),
+      world_points,
+      world_normals
+    );
+  }
 }
 
 TriangleMesh MultiStaticCameraPipeline::Triangulate(
