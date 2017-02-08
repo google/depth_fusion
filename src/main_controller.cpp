@@ -81,6 +81,7 @@ void MainController::OnReadInput() {
     //if(depth_updated) {
     {
       // TODO: pipeline should emit that TSDF has changed.
+      msc_pipeline_->Reset();
       msc_pipeline_->FuseMultiple();
       main_widget_->GetMultiStaticCameraGLState()->NotifyTSDFUpdated();
     }

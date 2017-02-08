@@ -26,6 +26,9 @@ using libcgt::cuda::Event;
 using libcgt::cuda::math::floorToInt;
 using libcgt::cuda::threadmath::threadSubscript2DGlobal;
 
+// TODO(jiawen): there's a lot of redundant computation:
+// grid_from_world and eye_world are only used to compute eye_grid
+
 __inline__ __device__ __host__
 float2 half2()
 {
@@ -55,9 +58,18 @@ float3 one3()
 
 // TODO: make this a method.
 // TODO: easy way to enforce boundary conditions:
-// clamp x to 0.5, width - 0.5,, etc.
+// clamp x to 0.5, width - 0.5, etc.
 // But that's not useful for SDFs! When you want to know when you're invalid.
-// Assumes the grid_point is valid (coords are within the extents).
+//
+
+// Trilinearly samples a regular grid of TSDF values at a particular grid
+// coordinate.
+//
+// We use the conventions that voxel centers have half-integer coordinates.
+// grid_point.x must be at least 0.5 and less than width - 0.5. Likewise for y
+// and z.
+//
+// Returns (0, 0) if any samples are invalid.
 __inline__ __device__
 float2 TrilinearSample(KernelArray3D<const TSDF> regular_grid,
   float3 grid_coords, float max_tsdf_value) {
@@ -123,6 +135,11 @@ float2 TrilinearSample(KernelArray3D<const TSDF> regular_grid,
   return { lerp(d_ll0, d_ll1, t.z), 1.0f };
 }
 
+// Trilinearly samples the grid at grid_coords and its three neighbors to
+// estimate the surface normal at grid_coords using forward differences.
+//
+// Returns (0, 0, 0, 0) if any samples are invalid.
+//
 // TODO(jiawen): optimized version without checks?
 __inline__ __device__
 float4 TrilinearSampleNormal(KernelArray3D<const TSDF> regular_grid,
@@ -131,11 +148,14 @@ float4 TrilinearSampleNormal(KernelArray3D<const TSDF> regular_grid,
   float3 dy3 = { 0, 1, 0 };
   float3 dz3 = { 0, 0, 1 };
 
+  // If any of the samples are invalid, they will be (0, 0).
   float2 d_000 = TrilinearSample(regular_grid, grid_coords, max_tsdf_value);
-  float2 d_100 = TrilinearSample(regular_grid, grid_coords + dx3, max_tsdf_value);
-  float2 d_010 = TrilinearSample(regular_grid, grid_coords + dy3, max_tsdf_value);
-  float2 d_001 = TrilinearSample(regular_grid, grid_coords + dz3, max_tsdf_value);
-  bool valid = d_000.y != 0 && d_100.y != 0 && d_010.y != 0 && d_001.y != 0;
+  float2 d_100 = TrilinearSample(regular_grid, grid_coords + dx3,
+    max_tsdf_value);
+  float2 d_010 = TrilinearSample(regular_grid, grid_coords + dy3,
+    max_tsdf_value);
+  float2 d_001 = TrilinearSample(regular_grid, grid_coords + dz3,
+    max_tsdf_value);
 
   float4 normal_out = {};
 
@@ -144,8 +164,10 @@ float4 TrilinearSampleNormal(KernelArray3D<const TSDF> regular_grid,
     d_010.x - d_000.x,
     d_001.x - d_000.x,
   };
+
+  // If any of the samples are invalid, length will be 0.
   float len = length(normal);
-  if (valid && len > 0) {
+  if (len > 0) {
     normal_out = make_float4(normal / len, 1.0f);
   }
 
@@ -225,6 +247,124 @@ void RaycastKernel(KernelArray3D<const TSDF> regular_grid,
     prev_sdf = curr_sdf;
 
     curr_t = prev_t + kTStepSize;
+    curr_coords_grid = eye_grid + curr_t * dir_grid;
+    curr_sdf = TrilinearSample(regular_grid, curr_coords_grid, max_tsdf_value);
+
+    // Both samples are valid, and it's a positive to negative zero crossing.
+    if (prev_sdf.y > 0 && curr_sdf.y > 0 &&
+      prev_sdf.x > 0 && curr_sdf.x < 0) {
+      found_surface = true;
+      break;
+    }
+  }
+
+  if (found_surface) {
+    // How far should I interpolate between the SDF values?
+    float alpha = prev_sdf.x / (prev_sdf.x - curr_sdf.x);
+
+    // Use it to lerp t itself to get a better estimate of the zero crossing.
+    float t_at_surface = lerp(prev_t, curr_t, alpha);
+
+    float3 surface_point_grid = eye_grid + t_at_surface * dir_grid;
+
+    // Convert to world space.
+    // TODO(jiawen): make this a method
+    world_point = make_float4(
+      transformPoint(world_from_grid, surface_point_grid), 1.0f);
+    float4 grid_normal = TrilinearSampleNormal(regular_grid,
+      surface_point_grid, max_tsdf_value);
+    if (grid_normal.w > 0) {
+      // TODO(jiawen): the gradient is weird and only needs the rotation part
+      // of the world_from_grid transformation. It's because we store world
+      // distances in the grid.
+      world_normal = make_float4(
+        normalize(transformVector(world_from_grid, make_float3(grid_normal))),
+        1.0f);
+    }
+  }
+
+  world_points_out[xy] = world_point;
+  world_normals_out[xy] = world_normal;
+}
+
+__global__
+void AdaptiveRaycastKernel(KernelArray3D<const TSDF> regular_grid,
+  float4x4 grid_from_world,
+  float4x4 world_from_grid,
+  float max_tsdf_value,
+  float voxels_per_meter,
+  float4 flpp,
+  float4x4 world_from_camera,
+  float3 eye_world,
+  KernelArray2D<float4> world_points_out,
+  KernelArray2D<float4> world_normals_out) {
+  // TODO(jiawen): simplify this logic with a "bool valid" flag.
+  float4 world_point = {};
+  float4 world_normal = {};
+
+  // Cast a ray for each pixel.
+  int2 xy = threadSubscript2DGlobal();
+  if (!contains(world_points_out.size(), xy)) {
+    world_points_out[xy] = world_point;
+    world_normals_out[xy] = world_normal;
+    return;
+  }
+
+  float3 dir_grid = normalize(transformVector(grid_from_world,
+    transformVector(world_from_camera, CameraDirectionFromPixel(xy, flpp))));
+
+  // TODO(jiawen): make this a method, or pass it in directly
+  float3 eye_grid = transformPoint(grid_from_world, eye_world);
+
+  // Pick a starting point: intersect the ray with the grid bounding box.
+  float t_near;
+  float t_far;
+  // TODO(jiawen): intersect with a grid that's 1 voxel smaller.
+  libcgt::cuda::Box3f bbox_grid(regular_grid.size());
+  bool intersected = libcgt::cuda::intersectLine(eye_grid, dir_grid,
+    bbox_grid, t_near, t_far);
+
+  if (!intersected) {
+    world_points_out[xy] = world_point;
+    world_normals_out[xy] = world_normal;
+    return;
+  }
+
+  // If the near starting point is behind the eye, clamp it to the eye.
+  // If it's in front of the eye, then start there.
+  // But we don't want to start directly on a face, so add epsilon to it.
+  float t_start = fmaxf(0, t_near) + kTEpsilon;
+
+  // Likewise, the end point should not be on a face.
+  float t_end = fmaxf(0, t_far) - kTEpsilon;
+
+  // Iterate until we exit, or found a surface.
+  bool found_surface = false;
+
+  float prev_t;
+  float3 prev_coords_grid = {};
+  float2 prev_sdf = {};
+
+  float curr_t = t_near;
+  float3 curr_coords_grid = eye_grid + curr_t * dir_grid;
+  float2 curr_sdf =
+    TrilinearSample(regular_grid, curr_coords_grid, max_tsdf_value);
+
+  while (!found_surface && curr_t < t_end) {
+    prev_t = curr_t;
+    prev_coords_grid = curr_coords_grid;
+    prev_sdf = curr_sdf;
+
+    // If the SDF is valid and is > 1, then use it as the step size.
+    // Otherwise, use max_tsdf_value.
+    float step_size = ( prev_sdf.y > 0 ) ?
+      prev_sdf.x * voxels_per_meter :
+      max_tsdf_value * voxels_per_meter;
+    if (step_size < kTStepSize) {
+      step_size = kTStepSize;
+    }
+
+    curr_t = prev_t + step_size;
     curr_coords_grid = eye_grid + curr_t * dir_grid;
     curr_sdf = TrilinearSample(regular_grid, curr_coords_grid, max_tsdf_value);
 

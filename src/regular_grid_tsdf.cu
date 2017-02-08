@@ -161,6 +161,55 @@ void RegularGridTSDF::FuseMultiple(
   }
 }
 
+void RegularGridTSDF::AdaptiveRaycast(const Vector4f& depth_camera_flpp,
+  const Matrix4f& world_from_camera,
+  DeviceArray2D<float4>& world_points_out,
+  DeviceArray2D<float4>& world_normals_out) {
+  dim3 block_dim(16, 16, 1);
+  dim3 grid_dim = libcgt::cuda::math::numBins2D(
+    { world_points_out.width(), world_points_out.height() },
+    block_dim
+  );
+
+  Vector4f eye = world_from_camera * Vector4f(0, 0, 0, 1);
+  float voxels_per_meter = 1.0f / VoxelSize();
+
+  static float msTotal = 0.0f;
+  static int nIterationsTotal = 0;
+  Event e;
+
+  if (FLAGS_collect_perf) {
+    e.recordStart();
+  }
+
+  AdaptiveRaycastKernel<<<grid_dim, block_dim>>>(
+    device_grid_.readView(),
+    make_float4x4(grid_from_world_.asMatrix()),
+    make_float4x4(world_from_grid_.asMatrix()),
+    max_tsdf_value_,
+    voxels_per_meter,
+    make_float4(depth_camera_flpp),
+    make_float4x4(world_from_camera),
+    make_float3(eye.xyz),
+    world_points_out.writeView(),
+    world_normals_out.writeView()
+  );
+
+  if (FLAGS_collect_perf) {
+    float msElapsed = e.recordStopSyncAndGetMillisecondsElapsed();
+
+    msTotal += msElapsed;
+    ++nIterationsTotal;
+
+    printf("AdaptiveRaycastKernel took: %f ms\n", msElapsed);
+
+    printf("%d run average: %f ms\n",
+      nIterationsTotal, msTotal / nIterationsTotal);
+    printf("resolution: %d x %d\n", world_points_out.width(),
+      world_points_out.height());
+  }
+}
+
 void RegularGridTSDF::Raycast(const Vector4f& depth_camera_flpp,
   const Matrix4f& world_from_camera,
   DeviceArray2D<float4>& world_points_out,
@@ -174,6 +223,8 @@ void RegularGridTSDF::Raycast(const Vector4f& depth_camera_flpp,
 
   Vector4f eye = world_from_camera * Vector4f(0, 0, 0, 1);
 
+  static float msTotal = 0.0f;
+  static int nIterationsTotal = 0;
   Event e;
 
   if (FLAGS_collect_perf) {
@@ -194,7 +245,16 @@ void RegularGridTSDF::Raycast(const Vector4f& depth_camera_flpp,
 
   if (FLAGS_collect_perf) {
     float msElapsed = e.recordStopSyncAndGetMillisecondsElapsed();
-    printf("Raycast() took: %f ms\n", msElapsed);
+
+    msTotal += msElapsed;
+    ++nIterationsTotal;
+
+    printf("RaycastKernel took: %f ms\n", msElapsed);
+
+    printf("%d run average: %f ms\n",
+      nIterationsTotal, msTotal / nIterationsTotal);
+    printf("resolution: %d x %d\n", world_points_out.width(),
+      world_points_out.height());
   }
 }
 

@@ -29,12 +29,6 @@ class ArucoPoseEstimator {
 
   using EuclideanTransform = libcgt::core::vecmath::EuclideanTransform;
 
-  struct Detection {
-    std::vector< int > ids;
-    std::vector< std::vector< cv::Point2f > > corners;
-    std::vector< std::vector< cv::Point2f > > rejected;
-  };
-
   // Pose estimate.
   //
   // If valid = true:
@@ -66,18 +60,24 @@ class ArucoPoseEstimator {
     cv::Vec3d camera_from_board_translation;
   };
 
-  // TODO(jiawen): also pass in a cv::aruco::DetectorParameters object.
-  ArucoPoseEstimator(const CameraParameters& params,
-      const std::string& detector_params_filename);
+  // TODO: pass in a cv::aruco::DetectorParameters object instead of a
+  // filename.
+  ArucoPoseEstimator(const cv::aruco::Board& fiducial,
+    const CameraParameters& params,
+    const std::string& detector_params_filename);
 
-  // Generate the board image. width and height are in pixels.
-  // Returns a cv::Mat(height, width, CV_8U).
-  cv::Mat BoardImage(int width, int height);
+  // TODO: rename parameter to note that y should point down
+  // TODO: allow visualization by passing in a second parameter
+  Result EstimatePose(Array2DReadView<uint8x3> bgr,
+    Array2DWriteView<uint8x3> vis = Array2DWriteView<uint8x3>()) const;
 
-  // Generate the board image, flipped up/down as a Array2D<uint8_t> so that
-  // it is suitable for OpenGL.
-  // "width" and "height" are in pixels.
-  Array2D<uint8_t> GLBoardImage(int width, int height);
+private:
+
+  struct Detection {
+    std::vector< int > ids;
+    std::vector< std::vector< cv::Point2f > > corners;
+    std::vector< std::vector< cv::Point2f > > rejected;
+  };
 
   Detection Detect(cv::Mat image) const;
 
@@ -90,39 +90,23 @@ class ArucoPoseEstimator {
   // The Detection may be invalid if there are not enough corners.
   Result EstimatePose(const Detection& detection) const;
 
-  Result EstimatePose(Array2DReadView<uint8x3> bgr) const;
-
-  static void VisualizeDetections(const Detection& detection,
-      bool show_rejected, cv::Mat* vis_image);
-
-  void VisualizePoseEstimate(const Result& pose_estimate,
-      cv::Mat* vis_image);
-
-private:
-
   cv::Mat camera_intrinsics_;
   cv::Mat camera_dist_coeffs_;
 
-  cv::aruco::Dictionary dictionary_;
-  cv::aruco::GridBoard board_;
+  cv::aruco::Board board_;
   cv::aruco::DetectorParameters detector_params_;
 
-  // Number of markers in x and y.
-  int markers_x_;
-  int markers_y_;
+  // Rotation matrix about the x-axis by 180 degrees.
+  const Matrix4f rot_x_180_;
 
-  // Side length of one marker, in meters.
-  float marker_length_;
+  // For visualization.
+  float axis_length_meters_;
 
-  // Length of the empty space between markers:
-  // the end of one marker and the start of the next.
-  float marker_separation_;
+  static void VisualizeDetections(const Detection& detection,
+      bool show_rejected, Array2DWriteView<uint8x3> output);
 
-  // Computed just for visualizing the axis.
-  float axis_length_;
-
-  // Rotation matrix about the x-axis by pi radians.
-  const Matrix4f rot_x_pi_;
+  void VisualizePoseEstimate(const Result& pose_estimate,
+    Array2DWriteView<uint8x3> output) const;
 };
 
 #endif  // ARUCO_POSE_ESTIMATOR_H

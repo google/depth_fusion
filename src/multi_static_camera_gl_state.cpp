@@ -26,11 +26,11 @@ using libcgt::core::geometry::translate;
 using libcgt::cuda::gl::Texture2D;
 
 namespace {
-const std::string kDrawTextureVSSrc =
-#include "shaders/draw_texture.vs.glsl"
+const std::string kPositionTexcoordVSSrc =
+#include "shaders/position_texcoord.vs.glsl"
 ;
-const std::string kDrawColorVSSrc =
-#include "shaders/draw_color.vs.glsl"
+const std::string kPositionColorVSSrc =
+#include "shaders/position_color.vs.glsl"
 ;
 const std::string kPositionOnlyVSSrc =
 #include "shaders/position_only.vs.glsl"
@@ -74,52 +74,38 @@ MultiStaticCameraGLState::MultiStaticCameraGLState(
   xy_coords_(2,
     pipeline->GetCameraParameters(0).depth.resolution.x *
     pipeline->GetCameraParameters(0).depth.resolution.y) {
-	programs_.emplace("drawColorVS",
-		GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
-			kDrawColorVSSrc.c_str()));
-	programs_.emplace("positionOnlyVS",
-		GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
-			kPositionOnlyVSSrc.c_str()));
-	programs_.emplace("drawTextureVS",
-		GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
-			kDrawTextureVSSrc.c_str()));
-	programs_.emplace("unprojectPointCloudVS",
-		GLSeparableProgram(GLSeparableProgram::Type::VERTEX_SHADER,
-			kUnprojectPointCloudVSSrc.c_str()));
 
-	programs_.emplace("drawColorFS",
-		GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
-			kDrawColorFSSrc.c_str()));
-	programs_.emplace("drawColorDiscardTransparentFS",
-		GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
-			kDrawColorDiscardTransparentFSSrc.c_str()));
-	programs_.emplace("drawSingleColorFS",
-		GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
-			kDrawSingleColorFSSrc.c_str()));
-	programs_.emplace("drawTextureFS",
-		GLSeparableProgram(GLSeparableProgram::Type::FRAGMENT_SHADER,
-			kDrawTextureFSSrc.c_str()));
+  auto positionColorVS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::VERTEX_SHADER, kPositionColorVSSrc.c_str());
+  auto positionOnlyVS = std::make_shared<GLSeparableProgram>(
+		GLSeparableProgram::Type::VERTEX_SHADER, kPositionOnlyVSSrc.c_str());
+	auto positionTexcoordVS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::VERTEX_SHADER, kPositionTexcoordVSSrc.c_str());
+	auto unprojectPointCloudVS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::VERTEX_SHADER,
+    kUnprojectPointCloudVSSrc.c_str());
 
-	draw_color_.attachProgram(programs_["drawColorVS"]);
-	draw_color_.attachProgram(programs_["drawColorFS"]);
+	auto drawColorFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawColorFSSrc.c_str());
+	auto drawColorDiscardTransparentFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER,
+    kDrawColorDiscardTransparentFSSrc.c_str());
+	auto drawSingleColorFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawSingleColorFSSrc.c_str());
+	auto drawTextureFS = std::make_shared<GLSeparableProgram>(
+    GLSeparableProgram::Type::FRAGMENT_SHADER, kDrawTextureFSSrc.c_str());
 
-	draw_single_color_.attachProgram(programs_["positionOnlyVS"]);
-	draw_single_color_.attachProgram(programs_["drawSingleColorFS"]);
+	draw_color_.attachProgram(positionColorVS);
+	draw_color_.attachProgram(drawColorFS);
 
-	draw_texture_.attachProgram(programs_["drawTextureVS"]);
-	draw_texture_.attachProgram(programs_["drawTextureFS"]);
+	draw_single_color_.attachProgram(positionOnlyVS);
+	draw_single_color_.attachProgram(drawSingleColorFS);
 
-	unproject_point_cloud_.attachProgram(programs_["unprojectPointCloudVS"]);
-	unproject_point_cloud_.attachProgram(
-		programs_["drawColorDiscardTransparentFS"]);
+	draw_texture_.attachProgram(positionTexcoordVS);
+	draw_texture_.attachProgram(drawTextureFS);
 
-	GLTexture::SwizzleTarget swizzle_rrr1[4] =
-	{
-		GLTexture::SwizzleTarget::RED,
-		GLTexture::SwizzleTarget::RED,
-		GLTexture::SwizzleTarget::RED,
-		GLTexture::SwizzleTarget::ONE
-	};
+	unproject_point_cloud_.attachProgram(unprojectPointCloudVS);
+	unproject_point_cloud_.attachProgram(drawColorDiscardTransparentFS);
 
   Vector2i depth_resolution =
     pipeline->GetCameraParameters(0).depth.resolution;
@@ -130,8 +116,10 @@ MultiStaticCameraGLState::MultiStaticCameraGLState(
     undistorted_depth_textures_.emplace_back(
       Texture2D(GLTexture2D(depth_resolution, GLImageInternalFormat::R32F),
         Texture2D::MapFlags::WRITE_DISCARD));
-    raw_depth_textures_.back().texture().setSwizzleRGBA(swizzle_rrr1);
-    undistorted_depth_textures_.back().texture().setSwizzleRGBA(swizzle_rrr1);
+    raw_depth_textures_.back().texture().setSwizzleRGBAlpha(
+      GLTexture::SwizzleTarget::RED);
+    undistorted_depth_textures_.back().texture().setSwizzleRGBA(
+      GLTexture::SwizzleTarget::RED);
   }
 
   depth_camera_frusta_[0].updateColor({1, 0, 0, 1});
@@ -230,11 +218,10 @@ void MultiStaticCameraGLState::DrawInputsAndIntermediates() {
     Matrix4f::translation(Vector3f{offset});
   colorMatrix.setRow(3, Vector4f{1, 0, 0, 0});
 
-  GLSeparableProgram& vs = programs_["drawTextureVS"];
-  vs.setUniformMatrix4f(0, Matrix4f::identity());
-  GLSeparableProgram& fs = programs_["drawTextureFS"];
-  fs.setUniformInt(0, 0); // sampler
-  fs.setUniformMatrix4f(1, colorMatrix);
+  draw_texture_.vertexProgram()->setUniformMatrix4f(0, Matrix4f::identity());
+  auto fs = draw_texture_.fragmentProgram();
+  fs->setUniformInt(0, 0); // sampler
+  fs->setUniformMatrix4f(1, colorMatrix);
   draw_texture_.bind();
 
   Vector2i sz = raw_depth_textures_[0].texture().size() / 2;
@@ -257,8 +244,8 @@ void MultiStaticCameraGLState::DrawInputsAndIntermediates() {
 }
 
 void MultiStaticCameraGLState::DrawWorldAxes() {
-  GLSeparableProgram& vs = programs_["drawColorVS"];
-  vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
+  draw_color_.vertexProgram()->setUniformMatrix4f(0,
+    free_camera_.viewProjectionMatrix());
   draw_color_.bind();
 
   world_axes_.draw();
@@ -267,8 +254,8 @@ void MultiStaticCameraGLState::DrawWorldAxes() {
 }
 
 void MultiStaticCameraGLState::DrawCameraFrustaAndTSDFGrid() {
-  GLSeparableProgram& vs = programs_["drawColorVS"];
-  vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
+  draw_color_.vertexProgram()->setUniformMatrix4f(0,
+    free_camera_.viewProjectionMatrix());
   draw_color_.bind();
 
   for(size_t i = 0; i < depth_camera_frusta_.size(); ++i) {
@@ -294,8 +281,8 @@ void MultiStaticCameraGLState::DrawUnprojectedPointClouds() {
   const int kDepthTextureUnit = 0;
 
   unproject_point_cloud_.bind();
-  GLSeparableProgram& vs = programs_["unprojectPointCloudVS"];
-  vs.setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
+  auto vs = unproject_point_cloud_.vertexProgram();
+  vs->setUniformMatrix4f(0, free_camera_.viewProjectionMatrix());
 
   for (int i = 0; i < pipeline_->NumCameras(); ++i) {
   //for(int i = 0; i < 1; ++i) {
@@ -304,23 +291,24 @@ void MultiStaticCameraGLState::DrawUnprojectedPointClouds() {
       params.intrinsics.focalLength, params.intrinsics.principalPoint};
     Vector2f depth_range{
       params.depth_range.minimum(), params.depth_range.maximum() };
-    vs.setUniformVector4f(1, flpp);
-    vs.setUniformVector2f(2, depth_range);
-    vs.setUniformMatrix4f(3,
+    vs->setUniformVector4f(1, flpp);
+    vs->setUniformVector2f(2, depth_range);
+    vs->setUniformMatrix4f(3,
       pipeline_->GetDepthCamera(i).worldFromCamera().asMatrix());
 
-    vs.setUniformInt(4, kDepthTextureUnit);
+    vs->setUniformInt(4, kDepthTextureUnit);
     undistorted_depth_textures_[i].texture().bind(kDepthTextureUnit);
     nearest_sampler_.bind(kDepthTextureUnit);
 
+    // HACK: color for each camera.
     if (i == 0) {
-      vs.setUniformVector4f(5, Vector4f(1, 0, 0, 1));
+      vs->setUniformVector4f(5, Vector4f(1, 0, 0, 1));
     } else if(i == 1) {
-      vs.setUniformVector4f(5, Vector4f(0, 1, 0, 1));
+      vs->setUniformVector4f(5, Vector4f(0, 1, 0, 1));
     } else if(i == 2) {
-      vs.setUniformVector4f(5, Vector4f(0, 0, 1, 1));
+      vs->setUniformVector4f(5, Vector4f(0, 0, 1, 1));
     } else {
-      vs.setUniformVector4f(5, Vector4f{1});
+      vs->setUniformVector4f(5, Vector4f{1});
     }
 
     xy_coords_.draw();
@@ -346,11 +334,10 @@ void MultiStaticCameraGLState::DrawFullscreenRaycast() {
   glDisable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
 
-  GLSeparableProgram& vs = programs_["drawTextureVS"];
-  vs.setUniformMatrix4f(0, Matrix4f::identity());
-  GLSeparableProgram& fs = programs_["drawTextureFS"];
-  fs.setUniformInt(0, 0); // sampler
-  fs.setUniformMatrix4f(1, normalsToRGBA());
+  draw_texture_.vertexProgram()->setUniformMatrix4f(0, Matrix4f::identity());
+  auto fs = draw_texture_.fragmentProgram();
+  fs->setUniformInt(0, 0); // sampler
+  fs->setUniformMatrix4f(1, normalsToRGBA());
   draw_texture_.bind();
 
   free_camera_world_normals_tex_.texture().bind(0);

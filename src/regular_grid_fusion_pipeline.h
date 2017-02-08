@@ -24,6 +24,7 @@
 #include "libcgt/cuda/DeviceArray2D.h"
 
 #include "aruco_pose_estimator.h"
+#include "aruco/cube_fiducial.h"
 #include "regular_grid_tsdf.h"
 #include "rgbd_camera_parameters.h"
 #include "depth_processor.h"
@@ -61,10 +62,15 @@ class RegularGridFusionPipeline : public QObject {
   void Reset();
 
   const RGBDCameraParameters& GetCameraParameters() const;
+  const CubeFiducial& GetArucoCubeFiducial() const;
 
   // Get a mutable reference to the input buffer. Clients should update the
   // values in the input buffer then call NotifyInputUpdated();
   InputBuffer& GetInputBuffer();
+
+  // Get a read-only view of the latest color pose estimator's visualization.
+  // TODO: this buffer is y-up but BGR format.
+  Array2DReadView<uint8x3> GetColorPoseEstimatorVisualization() const;
 
   // TODO: refactor into separate NotifyColorUpdated(), NotifyDepthUpdated()
   // calls. It is possible that they are synchronized: they have the same frame
@@ -157,7 +163,11 @@ class RegularGridFusionPipeline : public QObject {
   const int kMaxSuccessiveFailuresBeforeReset = 1000;
   int num_successive_failures_ = 0;
   ProjectivePointPlaneICP icp_;
+
+  CubeFiducial aruco_cube_fiducial_;
   ArucoPoseEstimator aruco_pose_estimator_;
+  // Visualization of the last pose estimate, y up.
+  Array2D<uint8x3> aruco_vis_;
 
   PoseFrame::EstimationMethod pose_estimation_method_;
 

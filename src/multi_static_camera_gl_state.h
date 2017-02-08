@@ -84,8 +84,6 @@ class MultiStaticCameraGLState : public QObject {
   libcgt::cuda::gl::Texture2D free_camera_world_normals_tex_;
 
   // ----- GL helper objects -----
-  std::unordered_map<std::string, GLSeparableProgram> programs_;
-
   GLProgramPipeline draw_color_;
   GLProgramPipeline draw_single_color_;
   GLProgramPipeline draw_texture_;

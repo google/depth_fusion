@@ -15,6 +15,8 @@ R"(
 #version 450
 
 layout(location = 0) uniform mat4 uCameraFromWorld;
+// Initialize to identity, scalar constructor is along *diagonal*.
+layout(location = 1) uniform mat4 uWorldFromObject = mat4(1.0);
 
 layout(location = 0) in vec4 aPos;
 layout(location = 1) in vec2 aTex;
@@ -31,7 +33,7 @@ out VertexData
 
 void main()
 {
-    gl_Position = uCameraFromWorld * aPos;
+    gl_Position = uCameraFromWorld * uWorldFromObject * aPos;
     vTex = aTex;
 }
 )"

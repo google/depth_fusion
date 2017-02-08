@@ -62,64 +62,72 @@ bool readDetectorParameters(const std::string& filename, cv::aruco::DetectorPara
 }
 
 // 4x4_50: 4x4 bits (4 bits in each direction), 50 markers.
-ArucoPoseEstimator::ArucoPoseEstimator(const CameraParameters& params,
+ArucoPoseEstimator::ArucoPoseEstimator(const cv::aruco::Board& fiducial,
+  const CameraParameters& params,
   const std::string& detector_params_filename) :
-  dictionary_(cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50)),
-  markers_x_(2),
-  markers_y_(2),
-  marker_length_(0.064f),
-  marker_separation_(0.064f),
-  rot_x_pi_(Matrix4f::rotateX(static_cast<float>(M_PI))) {
+  board_(fiducial),
+  rot_x_180_(Matrix4f::rotateX(static_cast<float>(M_PI))) {
 
   // TODO: write a utility function for this.
   camera_intrinsics_ = makeCameraMatrix(params.intrinsics.focalLength.x,
     params.intrinsics.principalPoint.x - 0.5f,
     params.resolution.y - (params.intrinsics.principalPoint.y - 0.5f));
-  camera_dist_coeffs_ = cv::Mat::zeros(1, params.dist_coeffs.size(), CV_32F);
+  camera_dist_coeffs_ = cv::Mat::zeros(1,
+    static_cast<int>(params.dist_coeffs.size()), CV_32F);
   for (int i = 0; i < static_cast<int>(params.dist_coeffs.size()); ++i) {
     camera_dist_coeffs_.at<float>(0, i) = params.dist_coeffs[i];
   }
 
-  // Detailed documentation here:
-  // http://docs.opencv.org/3.1.0/d9/d6d/tutorial_table_of_content_aruco.html#gsc.tab=0
-  // Predefined dictionaries have "names" which are actually enum instances
-  // of the form: DICT_<num_bits_x>X<num_bits_y>_<num_markers>
-  // DICT_4X4_50 means: each marker is 4 bits by 4 bits. The dictionary
-  // consists of 50 markers.
-
-  board_ = cv::aruco::GridBoard::create(
-      markers_x_, markers_y_,
-      marker_length_, marker_separation_,
-      dictionary_);
-
-  axis_length_ = 0.5f * (marker_separation_ +
-      (float)std::min(markers_x_, markers_y_) *
-      (marker_length_ + marker_separation_));
+  cv::Point3f p0 = fiducial.objPoints[0][0];
+  cv::Point3f p1 = fiducial.objPoints[0][1];
+  axis_length_meters_ = 2.0f * static_cast<float>(cv::norm(p1 - p0));
 
   // TODO: bake this as a static default option. And let them pass one in.
   bool read_ok = readDetectorParameters(detector_params_filename, detector_params_);
 }
 
-cv::Mat ArucoPoseEstimator::BoardImage(int width, int height) {
-    cv::Mat board_image(height, width, CV_8U);
-    board_.draw(board_image.size(), board_image);
-    return board_image;
-}
+// TODO: if (FLAG_log_tracking_perf)
 
-Array2D<uint8_t> ArucoPoseEstimator::GLBoardImage(int width, int height) {
-    Array2D<uint8_t> gl_board_image({width, height});
-    cv::Mat cv_board_image = BoardImage(width, height);
-    Array2DReadView<uint8_t> src = flipY(
-      cvMatAsArray2DView<uint8_t>(cv_board_image));
-    copy(src, gl_board_image.writeView());
-    return gl_board_image;
+ArucoPoseEstimator::Result ArucoPoseEstimator::EstimatePose(
+  Array2DReadView<uint8x3> bgr,
+  Array2DWriteView<uint8x3> vis) const {
+  auto t0 = std::chrono::high_resolution_clock::now();
+
+  cv::Mat bgr_mat = array2DViewAsCvMat(bgr);
+  ArucoPoseEstimator::Detection detection = Detect(bgr_mat);
+
+  auto t1 = std::chrono::high_resolution_clock::now();
+
+  Refine(bgr_mat, &detection);
+
+  auto t2 = std::chrono::high_resolution_clock::now();
+
+  ArucoPoseEstimator::Result result = EstimatePose(detection);
+
+  auto t3 = std::chrono::high_resolution_clock::now();
+
+  printf("ArUco: pose estimation took %lld ms\n",
+    libcgt::core::time::dtMS(t0, t3));
+  printf("ArUco: detect took %lld ms, refine took %lld ms, "
+    "estimate pose took %lld ms\n",
+    libcgt::core::time::dtMS(t0, t1),
+    libcgt::core::time::dtMS(t1, t2),
+    libcgt::core::time::dtMS(t2, t3));
+
+  if (vis.notNull()) {
+    copy(bgr, vis);
+    VisualizeDetections(detection, true, vis);
+    VisualizePoseEstimate(result, vis);
+  }
+
+  return result;
 }
 
 ArucoPoseEstimator::Detection
 ArucoPoseEstimator::Detect(cv::Mat image) const {
   ArucoPoseEstimator::Detection result;
-  cv::aruco::detectMarkers(image, dictionary_, result.corners, result.ids,
-    detector_params_, result.rejected);
+  cv::aruco::detectMarkers(image, board_.dictionary, result.corners,
+    result.ids, detector_params_, result.rejected);
   return result;
 }
 
@@ -159,78 +167,43 @@ ArucoPoseEstimator::Result ArucoPoseEstimator::EstimatePose(
     rt(2, 3) = static_cast<float>(pose.camera_from_board_translation(2));
     rt(3, 3) = 1.0f;
 
-    // TODO: y-up
-
-    Matrix4f rotx90 = Matrix4f::rotateX(static_cast<float>(M_PI_2));
-
-    // TODO: make a cube "board".
-
     // We only rotation by pi on one side and don't conjugate on both sides
-    // because aruco's coordinate system is such that:
-    // the board is in GL conventions, but the camera is in CV conventions.
+    // because ArUco uses a coordinate system where objPoints have GL
+    // conventions, but camera points are in CV conventions.
     // Therefore, what they compute is cv_camera <-- gl_board.
     EuclideanTransform camera_from_board = EuclideanTransform::fromMatrix(
-      rot_x_pi_ * rt * rotx90);
+      rot_x_180_ * rt);
     pose.world_from_camera = inverse(camera_from_board);
   }
   return pose;
 }
 
-ArucoPoseEstimator::Result ArucoPoseEstimator::EstimatePose(
-  Array2DReadView<uint8x3> bgr) const {
-  //cv::setNumThreads(1);
-  printf("Using %d threads\n", cv::getNumThreads());
-
-  auto t0 = std::chrono::high_resolution_clock::now();
-
-  cv::Mat bgr_mat = array2DViewAsCvMat(bgr);
-  ArucoPoseEstimator::Detection detection = Detect(bgr_mat);
-
-  auto t1 = std::chrono::high_resolution_clock::now();
-
-  Refine(bgr_mat, &detection);
-
-  auto t2 = std::chrono::high_resolution_clock::now();
-
-  ArucoPoseEstimator::Result result = EstimatePose(detection);
-
-  auto t3 = std::chrono::high_resolution_clock::now();
-
-  // TODO: time is almost entirely in detect.
-  // Using 48 threads, detection takes about 60 ms.
-  // Using 1 thread, dtection takes about 230 ms.
-
-  printf("ArUco: pose estimation took %lld ms\n",
-    libcgt::core::time::dtMS(t0, t3));
-  printf("ArUco: detect took %lld ms, refine took %lld ms, estimate pose took %lld ms\n",
-    libcgt::core::time::dtMS(t0, t1),
-    libcgt::core::time::dtMS(t1, t2),
-    libcgt::core::time::dtMS(t2, t3));
-  return result;
-}
-
 // static
 void ArucoPoseEstimator::VisualizeDetections(
   const ArucoPoseEstimator::Detection& detection,
-  bool show_rejected, cv::Mat* vis_image) {
+  bool show_rejected, Array2DWriteView<uint8x3> output) {
+  cv::Mat output_mat = array2DViewAsCvMat(output);
   if (detection.ids.size() > 0) {
-      cv::aruco::drawDetectedMarkers(*vis_image,
+      cv::aruco::drawDetectedMarkers(output_mat,
           detection.corners, detection.ids);
   }
   if (show_rejected && detection.rejected.size() > 0) {
-      cv::aruco::drawDetectedMarkers(*vis_image, detection.rejected,
+      cv::aruco::drawDetectedMarkers(output_mat, detection.rejected,
           cv::noArray(), cv::Scalar(100, 0, 255));
   }
 }
 
 void ArucoPoseEstimator::VisualizePoseEstimate(
   const ArucoPoseEstimator::Result& estimate_result,
-  cv::Mat* vis_image) {
+  Array2DWriteView<uint8x3> output) const {
   if (estimate_result.valid) {
-    cv::aruco::drawAxis(*vis_image,
-      camera_intrinsics_, camera_dist_coeffs_,
+    cv::Mat intrinsics(camera_intrinsics_);
+    cv::Mat dist_coeffs(camera_dist_coeffs_);
+    cv::Mat output_mat = array2DViewAsCvMat(output);
+    cv::aruco::drawAxis(output_mat,
+      intrinsics, dist_coeffs,
       estimate_result.camera_from_board_rotation,
       estimate_result.camera_from_board_translation,
-      axis_length_);
+      axis_length_meters_);
   }
 }

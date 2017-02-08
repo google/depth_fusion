@@ -14,6 +14,7 @@
 #include <cstdio>
 
 #include <gflags/gflags.h>
+
 #include <QApplication>
 
 #include "libcgt/camera_wrappers/StreamConfig.h"
@@ -33,8 +34,13 @@ using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::SimilarityTransform;
 
 DEFINE_bool(collect_perf, false, "Collect performance statistics.");
+DEFINE_bool(adaptive_raycast, true, "Use signed distance values themselves "
+  " during raycasting rather than one voxel at a time. Much faster, slightly "
+  " less accurate.");
 DEFINE_string(mode, "single_moving",
   "Mode to run the app in. Either \"single_moving\" or \"multi_static\"." );
+
+// Single moving mode flags.
 DEFINE_string(sm_calibration_dir, "",
   "REQUIRED for single moving mode: "
   "calibration directory for the RGBD camera.");
@@ -54,6 +60,7 @@ DEFINE_string(sm_pose_estimator, "color_aruco_and_depth_icp",
 DEFINE_string(sm_pose_file, "",
   "Filename for precomputed pose path.");
 
+// Multi static mode flags.
 DEFINE_bool(ms_use_gui, true,
   "Set true to visualize with GUI, false to run in batch mode.");
 
@@ -237,6 +244,7 @@ SimilarityTransform MakeWorldFromGrid(const Vector3f& center,
 
 #include "libcgt/core/io/NumberedFilenameBuilder.h"
 
+
 int MultiStaticCameraMain(int argc, char* argv[]) {
   QApplication app(argc, argv);
 
@@ -387,3 +395,4 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 }
+
