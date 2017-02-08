@@ -94,7 +94,7 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
     LoadRGBDCameraParameters(FLAGS_sm_calibration_dir);
 
   const Vector3i kRegularGridResolution(512); // ~2m^3
-  const float kRegularGridVoxelSize = 0.004f; // 4 mm.
+  const float kRegularGridVoxelSize = 2.0f / kRegularGridResolution.x;
 
   RgbdInput rgbd_input(input_type, FLAGS_sm_input_args.c_str());
 
