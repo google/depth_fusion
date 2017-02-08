@@ -25,7 +25,7 @@
 #include "libcgt/opencv_interop/VecmathUtils.h"
 #include "libcgt/opencv_interop/Calib3d.h"
 
-#include "rgbd_camera_parameters.h"
+#include "src/rgbd_camera_parameters.h"
 
 using libcgt::core::arrayutils::copy;
 using libcgt::core::arrayutils::flipY;

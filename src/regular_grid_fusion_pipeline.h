@@ -23,7 +23,7 @@
 #include "libcgt/core/vecmath/EuclideanTransform.h"
 #include "libcgt/cuda/DeviceArray2D.h"
 
-#include "aruco_pose_estimator.h"
+#include "aruco/aruco_pose_estimator.h"
 #include "aruco/cube_fiducial.h"
 #include "regular_grid_tsdf.h"
 #include "rgbd_camera_parameters.h"
