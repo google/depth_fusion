@@ -114,4 +114,7 @@ private:
     Array2DWriteView<uint8x3> output) const;
 };
 
+bool ReadDetectorParameters(const std::string& filename,
+  cv::aruco::DetectorParameters& params);
+
 #endif  // ARUCO_POSE_ESTIMATOR_H

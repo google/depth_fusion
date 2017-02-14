@@ -101,7 +101,7 @@ PerspectiveCamera MultiStaticCameraPipeline::GetDepthCamera(
   return PerspectiveCamera(
     depth_camera_poses_cfw_[camera_index],
     camera_params_[camera_index].depth.intrinsics,
-    camera_params_[camera_index].depth.resolution,
+    Vector2f(camera_params_[camera_index].depth.resolution),
     camera_params_[camera_index].depth.depth_range.left(),
     camera_params_[camera_index].depth.depth_range.right()
   );
@@ -147,7 +147,7 @@ void MultiStaticCameraPipeline::FuseMultiple() {
 void MultiStaticCameraPipeline::Raycast(const PerspectiveCamera& camera,
                                         DeviceArray2D<float4>& world_points,
                                         DeviceArray2D<float4>& world_normals) {
-  Intrinsics intrinsics = camera.intrinsics(world_points.size());
+  Intrinsics intrinsics = camera.intrinsics(Vector2f(world_points.size()));
   Vector4f flpp{ intrinsics.focalLength, intrinsics.principalPoint };
 
   if (FLAGS_adaptive_raycast) {

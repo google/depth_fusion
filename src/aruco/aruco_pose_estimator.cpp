@@ -37,7 +37,8 @@ using libcgt::opencv_interop::makeCameraMatrix;
 
 DECLARE_bool(collect_perf);
 
-bool readDetectorParameters(const std::string& filename, cv::aruco::DetectorParameters& params) {
+bool ReadDetectorParameters(const std::string& filename,
+  cv::aruco::DetectorParameters& params) {
     cv::FileStorage fs(filename, cv::FileStorage::READ);
     if (!fs.isOpened()) {
         return false;
@@ -54,11 +55,14 @@ bool readDetectorParameters(const std::string& filename, cv::aruco::DetectorPara
     fs["minMarkerDistanceRate"] >> params.minMarkerDistanceRate;
     fs["doCornerRefinement"] >> params.doCornerRefinement;
     fs["cornerRefinementWinSize"] >> params.cornerRefinementWinSize;
-    fs["cornerRefinementMaxIterations"] >> params.cornerRefinementMaxIterations;
+    fs["cornerRefinementMaxIterations"] >>
+      params.cornerRefinementMaxIterations;
     fs["cornerRefinementMinAccuracy"] >> params.cornerRefinementMinAccuracy;
     fs["markerBorderBits"] >> params.markerBorderBits;
-    fs["perspectiveRemovePixelPerCell"] >> params.perspectiveRemovePixelPerCell;
-    fs["perspectiveRemoveIgnoredMarginPerCell"] >> params.perspectiveRemoveIgnoredMarginPerCell;
+    fs["perspectiveRemovePixelPerCell"] >>
+      params.perspectiveRemovePixelPerCell;
+    fs["perspectiveRemoveIgnoredMarginPerCell"] >>
+      params.perspectiveRemoveIgnoredMarginPerCell;
     fs["maxErroneousBitsInBorderRate"] >> params.maxErroneousBitsInBorderRate;
     fs["minOtsuStdDev"] >> params.minOtsuStdDev;
     fs["errorCorrectionRate"] >> params.errorCorrectionRate;
@@ -87,7 +91,8 @@ ArucoPoseEstimator::ArucoPoseEstimator(const cv::aruco::Board& fiducial,
   axis_length_meters_ = 2.0f * static_cast<float>(cv::norm(p1 - p0));
 
   // TODO: bake this as a static default option. And let them pass one in.
-  bool read_ok = readDetectorParameters(detector_params_filename, detector_params_);
+  bool read_ok = ReadDetectorParameters(detector_params_filename,
+    detector_params_);
 }
 
 ArucoPoseEstimator::Result ArucoPoseEstimator::EstimatePose(
@@ -113,9 +118,11 @@ ArucoPoseEstimator::Result ArucoPoseEstimator::EstimatePose(
   }
 
   if (vis.notNull()) {
-    copy(input, vis);
-    VisualizeDetections(detection, true, vis);
-    VisualizePoseEstimate(result, vis);
+    if (copy(input, vis)) {
+      //VisualizeDetections(detection, true, vis);
+      VisualizeDetections(detection, false, vis);
+      VisualizePoseEstimate(result, vis);
+    }
   }
 
   return result;

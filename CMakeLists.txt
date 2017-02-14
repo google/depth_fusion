@@ -63,6 +63,7 @@ set( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-gencode arch=compute_60,code=sm_60" )
 set( DEPTH_FUSION_HEADERS
     src/aruco/aruco_pose_estimator.h
     src/aruco/cube_fiducial.h
+	src/aruco/single_marker_fiducial.h
     src/calibrated_posed_depth_camera.h
     src/control_widget.h
     src/depth_processor.h
@@ -91,8 +92,8 @@ set( DEPTH_FUSION_SOURCES_CPP
     src/depth_fusion.cpp
     src/aruco/aruco_pose_estimator.cpp
     src/aruco/cube_fiducial.cpp
+	src/aruco/single_marker_fiducial.cpp
     src/control_widget.cpp
-    src/draw_camera_path.cpp
     src/icp_least_squares_data.cpp
     src/input_buffer.cpp
     src/main_controller.cpp
@@ -138,7 +139,19 @@ target_link_libraries( depth_fusion
     cgt_qt_interop	
 )
 
+# align_nvm_pose executable
+add_executable( align_nvm_pose
+    src/align_nvm_pose/align_nvm_pose.cpp
+)
+target_include_directories( align_nvm_pose PRIVATE . )
+target_link_libraries( align_nvm_pose
+    gflags
+	cgt_core
+    cgt_camera_wrappers
+)
+
 # rgbd2pose executable
+# TODO: rename rgbd2pose --> rgbd2arucopose?
 add_executable( rgbd2pose
     src/rgbd2pose.cpp
 	src/aruco/aruco_pose_estimator.h
@@ -154,6 +167,26 @@ add_executable( rgbd2pose
 )
 target_include_directories( rgbd2pose PRIVATE . )
 target_link_libraries( rgbd2pose
+    gflags
+    opengl32 GLEW::GLEW
+    Qt5::Core Qt5::OpenGL Qt5::Widgets
+    ${OpenCV_LIBS}
+	cgt_core
+    cgt_cuda
+    cgt_gl
+    cgt_camera_wrappers
+    cgt_opencv_interop
+    cgt_qt_interop	
+)
+
+add_executable( visualize_camera_path
+	src/rgbd_camera_parameters.h
+	src/rgbd_camera_parameters.cpp
+	src/visualize_camera_path/main_widget.h
+	src/visualize_camera_path/main_widget.cpp
+    src/visualize_camera_path/visualize_camera_path.cpp )
+target_include_directories( visualize_camera_path PRIVATE . )
+target_link_libraries( visualize_camera_path
     gflags
     opengl32 GLEW::GLEW
     Qt5::Core Qt5::OpenGL Qt5::Widgets
