@@ -25,6 +25,7 @@
 
 #include "aruco/aruco_pose_estimator.h"
 #include "aruco/cube_fiducial.h"
+#include "aruco/single_marker_fiducial.h"
 #include "regular_grid_tsdf.h"
 #include "rgbd_camera_parameters.h"
 #include "depth_processor.h"
@@ -48,7 +49,7 @@ class RegularGridFusionPipeline : public QObject {
     const SimilarityTransform& world_from_grid,
     PoseFrame::EstimationMethod pose_estimation_method =
         PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP,
-    const PoseFrame& initial_pose = PoseFrame{} );
+    const PoseFrame& initial_pose = PoseFrame{});
 
   // Construct a pipeline from an existing pose history.
   // Does no pose estimation.
@@ -57,7 +58,7 @@ class RegularGridFusionPipeline : public QObject {
     const RGBDCameraParameters& camera_params,
     const Vector3i& grid_resolution,
     const SimilarityTransform& world_from_grid,
-    const std::vector<PoseFrame>& pose_history);
+    const std::vector<PoseFrame>& precomputed_pose_history);
 
   void Reset();
 
@@ -76,7 +77,11 @@ class RegularGridFusionPipeline : public QObject {
   // calls. It is possible that they are synchronized: they have the same frame
   // index and very similar times. However, they are unlikely to be exactly the
   // same.
-  void NotifyInputUpdated(bool color_updated, bool depth_updated);
+  //void NotifyInputUpdated(bool color_updated, bool depth_updated);
+
+  void NotifyColorUpdated();
+
+  void NotifyDepthUpdated();
 
   // Returns the TSDF grid's axis aligned bounding box.
   // (0, 0, 0) --> Resolution().
@@ -165,6 +170,7 @@ class RegularGridFusionPipeline : public QObject {
   ProjectivePointPlaneICP icp_;
 
   CubeFiducial aruco_cube_fiducial_;
+  SingleMarkerFiducial aruco_single_marker_fiducial_;
   ArucoPoseEstimator aruco_pose_estimator_;
   // Visualization of the last pose estimate, y up.
   Array2D<uint8x3> aruco_vis_;

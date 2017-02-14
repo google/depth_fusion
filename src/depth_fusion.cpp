@@ -94,7 +94,9 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
     LoadRGBDCameraParameters(FLAGS_sm_calibration_dir);
 
   const Vector3i kRegularGridResolution(512); // ~2m^3
-  const float kRegularGridVoxelSize = 2.0f / kRegularGridResolution.x;
+  const float kRegularGridSideLength = 2.0f;
+  const float kRegularGridVoxelSize =
+    kRegularGridSideLength / kRegularGridResolution.x;
 
   RgbdInput rgbd_input(input_type, FLAGS_sm_input_args.c_str());
 
@@ -145,12 +147,17 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
     pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
       kRegularGridResolution, kInitialWorldFromGrid,
       PoseFrame::EstimationMethod::DEPTH_ICP, initial_pose_frame);
-  } else if (FLAGS_sm_pose_estimator == "precomputed") {
-    // Put the origin at the center of the cube.
+  } else if (FLAGS_sm_pose_estimator == "file") {
+    // Put the origin at the bottom in y, centered in x and z.
+#if 0
     const SimilarityTransform kInitialWorldFromGrid =
-      SimilarityTransform(kRegularGridVoxelSize) *
-      SimilarityTransform(Vector3f(-0.5f * kRegularGridResolution.x,
-        -0.5f * kRegularGridResolution.y, -0.5f * kRegularGridResolution.z));
+      SimilarityTransform(Vector3f(-0.5f * kRegularGridSideLength, 0.0f, -0.5f * kRegularGridSideLength)) *
+      SimilarityTransform(kRegularGridVoxelSize);
+#else
+    const SimilarityTransform kInitialWorldFromGrid =
+      SimilarityTransform(Vector3f(-0.5f * kRegularGridSideLength, -0.75f * kRegularGridSideLength, -0.5f * kRegularGridSideLength)) *
+      SimilarityTransform(kRegularGridVoxelSize);
+#endif
 
     std::vector<PoseFrame> pose_history = LoadPoseHistory(FLAGS_sm_pose_file,
       camera_params.depth_from_color);
@@ -300,12 +307,12 @@ int MultiStaticCameraMain(int argc, char* argv[]) {
   PerspectiveCamera center_camera(
     camera_poses[1],
     camera_params[1].depth.intrinsics,
-    camera_params[1].depth.resolution,
+    Vector2f(camera_params[1].depth.resolution),
     camera_params[1].depth.depth_range.left(),
     camera_params[1].depth.depth_range.right()
   );
   Vector4f p0 = center_camera.worldFromScreen(xy0,
-    z0, camera_params[1].depth.resolution);
+    z0, Vector2f(camera_params[1].depth.resolution));
 
   constexpr int kRegularGridResolution = 512;
   constexpr float kRegularGridSideLength = 2.0f;

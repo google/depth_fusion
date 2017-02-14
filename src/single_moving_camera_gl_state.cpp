@@ -48,17 +48,13 @@ const std::string kDrawSingleColorFSSrc =
 const std::string kVisualizeTexcoordsFSSrc =
 #include "shaders/visualize_texcoords.fs.glsl"
 ;
-}  // namespace
 
 // TODO: shaders can be shared between GL state objects.
-
-namespace {
 
 const bool kDrawUnprojectedPointCloud = true;
 const bool kDrawFullscreenRaycast = true;
 const int kFullscreenRaycastDownsampleFactor = 4;
-
-}
+}  // namespace
 
 SingleMovingCameraGLState::SingleMovingCameraGLState(
   RegularGridFusionPipeline* pipeline, QOpenGLWidget* parent) :
@@ -357,8 +353,8 @@ void SingleMovingCameraGLState::DrawUnprojectedPointCloud() {
 
 // HACK: why is the following wrong and using identity right?
 namespace {
-Matrix4f normalsToRGBA()
-{
+
+Matrix4f normalsToRGBA() {
   Matrix4f m = Matrix4f::uniformScaling( 0.5f ) *
     Matrix4f::translation(Vector3f{1.0f});
   m.setRow(3, Vector4f{1, 0, 0, 0});
@@ -367,6 +363,7 @@ Matrix4f normalsToRGBA()
 
   return m;
 }
+
 }
 
 void SingleMovingCameraGLState::DrawFullscreenRaycast() {
@@ -419,15 +416,17 @@ void SingleMovingCameraGLState::DrawRemappedTextures(
   auto fs = draw_texture_.fragmentProgram();
   fs->setUniformInt(0, 0); // sampler
 
-  Vector2i sz = floorToInt(
-    textures[0].texture->size() * textures[0].size_scale);
-  Rect2i current_rect{ { 0, 0 }, sz };
+  Vector2i current_origin(0);
   for (const auto& tex : textures) {
+    Vector2i sz = floorToInt(Vector2f(tex.texture->size()) * tex.size_scale);
+    Rect2i current_rect{current_origin, sz};
     GLUtilities::setViewport(current_rect);
      fs->setUniformMatrix4f(1, tex.color_transform);
     tex.texture->bind(0);
     input_buffer_textured_rect_.draw();
-    current_rect = translate(current_rect, current_rect.dx());
+
+    // Move origin for next rectangle.
+    current_origin.x += sz.x;
   }
 
   GLUtilities::setViewport(vp);
@@ -459,7 +458,8 @@ void SingleMovingCameraGLState::DrawInputsAndIntermediates() {
   textures.push_back(
     RemappedTexture {
       &color_tracking_vis_texture_,
-      Vector2f{ 0.5f, 0.5f },
+      //Vector2f{ 0.5f, 0.5f },
+      Vector2f{ 1.0f },
       Matrix4f::identity()
     }
   );
@@ -479,8 +479,6 @@ void SingleMovingCameraGLState::DrawInputsAndIntermediates() {
       depth_rescale_matrix
     }
   );
-
-  // TODO: normal remapping texture
 
   textures.push_back(
     RemappedTexture{

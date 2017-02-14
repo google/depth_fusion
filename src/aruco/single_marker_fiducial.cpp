@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "cube_fiducial.h"
+#include "single_marker_fiducial.h"
 
 #include "libcgt/core/common/Array2D.h"
 #include "libcgt/core/common/ArrayUtils.h"
@@ -30,20 +30,20 @@ using libcgt::opencv_interop::array2DViewAsCvMat;
 using libcgt::opencv_interop::toCVPoint;
 using std::vector;
 
-CubeFiducial::CubeFiducial(float side_length) :
-  CubeFiducial(makeBox(Vector3f{0}, side_length)) {
-}
-
-CubeFiducial::CubeFiducial(const Box3f& box) :
-  box_(box) {
+SingleMarkerFiducial::SingleMarkerFiducial(float side_length, int id) {
   objPoints.resize(kNumMarkers, vector<Point3f>(kNumPointsPerMarker));
   dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
-  ids = {0, 1, 2, 3, 4, 5};
+  ids = { id };
 
+  // In clockwise order.
+  objPoints[0][0] = Point3f{0.0f, 0.0f, 0.0f};
+  objPoints[0][1] = Point3f{side_length, 0.0f, 0.0f};
+  objPoints[0][2] = Point3f{side_length, 0.0f, side_length};
+  objPoints[0][3] = Point3f{0.0f, 0.0f, side_length};
+
+#if 0
   // Vertex positions in hypercube order.
-  // The "code box" has the same center but is only 3/4 the size.
-  // Each face of the code box is 6x6 bits: 4x4 bits for the actual code, with
-  // a 1 bit black border.
+  // The code box has the same center but is only 3/4 the size.
   Box3f code_box = makeBox(box.center(), 0.75f * box.size.x);
   Array1D<Vector4f> box_positions = corners(code_box);
   // Each face, looked head on, in clockwise order, from the top left.
@@ -62,12 +62,14 @@ CubeFiducial::CubeFiducial(const Box3f& box) :
       objPoints[i][j] = toCVPoint(p);
     }
   }
+#endif
 }
 
-CubeFiducialDrawable::CubeFiducialDrawable(const CubeFiducial& fiducial,
+#if 0
+SingleMarkerFiducialDrawable::SingleMarkerFiducialDrawable(const SingleMarkerFiducial& fiducial,
   int face_size_texels) :
   GLDrawable(GLPrimitiveType::TRIANGLES, calculator()),
-  texture_({CubeFiducial::kNumMarkers * face_size_texels, face_size_texels},
+  texture_({SingleMarkerFiducial::kNumMarkers * face_size_texels, face_size_texels},
     GLImageInternalFormat::R8) {
   // Vertex positions in hypercube order.
   Array1D<Vector4f> box_positions = corners(fiducial.box_);
@@ -84,11 +86,11 @@ CubeFiducialDrawable::CubeFiducialDrawable(const CubeFiducial& fiducial,
 
   // Populate GL texture coordinates.
   {
-    float inv_face_size = 1.0f / CubeFiducial::kNumMarkers;
+    float inv_face_size = 1.0f / SingleMarkerFiducial::kNumMarkers;
     auto mb = mapAttribute<Vector2f>(1);
     Array1DWriteView<Vector2f> texture_coordinates = mb.view();
-    for (int i = 0; i < CubeFiducial::kNumMarkers; ++i) {
-      int b = CubeFiducial::kNumMarkers * i;
+    for (int i = 0; i < SingleMarkerFiducial::kNumMarkers; ++i) {
+      int b = SingleMarkerFiducial::kNumMarkers * i;
       texture_coordinates[b    ] = Vector2f{i * inv_face_size      , 0.0f};
       texture_coordinates[b + 1] = Vector2f{(i + 1) * inv_face_size, 0.0f};
       texture_coordinates[b + 2] = Vector2f{i * inv_face_size      , 1.0f};
@@ -120,7 +122,7 @@ CubeFiducialDrawable::CubeFiducialDrawable(const CubeFiducial& fiducial,
   Array2D<uint8_t> face_tex_data(code_with_border_size);
   cv::Mat cv_view = array2DViewAsCvMat(face_tex_data.writeView());
 
-  for (int i = 0; i < CubeFiducial::kNumMarkers; ++i) {
+  for (int i = 0; i < SingleMarkerFiducial::kNumMarkers; ++i) {
     int id = fiducial.ids[i];
     // TODO: draw the marker directly using the dictionary byte list instead
     // of using dict.drawMarker, draws then resizes.
@@ -134,16 +136,17 @@ CubeFiducialDrawable::CubeFiducialDrawable(const CubeFiducial& fiducial,
   texture_.setSwizzleRGBAlpha(GLTexture::SwizzleTarget::RED);
 }
 
-const GLTexture2D& CubeFiducialDrawable::texture() const {
+const GLTexture2D& SingleMarkerFiducialDrawable::texture() const {
   return texture_;
 }
 
 // static
-PlanarVertexBufferCalculator CubeFiducialDrawable::calculator() {
-  constexpr int kNumTriangles = 2 * CubeFiducial::kNumMarkers;
+PlanarVertexBufferCalculator SingleMarkerFiducialDrawable::calculator() {
+  constexpr int kNumTriangles = 2 * SingleMarkerFiducial::kNumMarkers;
   constexpr int nVertices = 3 * kNumTriangles;
   PlanarVertexBufferCalculator calculator( nVertices );
   calculator.addAttribute< Vector3f >();
   calculator.addAttribute< Vector2f >();
   return calculator;
 }
+#endif

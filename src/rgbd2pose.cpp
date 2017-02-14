@@ -10,8 +10,9 @@
 #include "rgbd_input.h"
 #include "input_buffer.h"
 
+#include "aruco/aruco_pose_estimator.h"
 #include "aruco/cube_fiducial.h"
-#include "aruco_pose_estimator.h"
+#include "aruco/single_marker_fiducial.h"
 
 using libcgt::camera_wrappers::PoseInputStream;
 using libcgt::camera_wrappers::PoseOutputStream;

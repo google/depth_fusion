@@ -59,8 +59,13 @@ void MainController::OnReadInput() {
     bool depth_updated;
     input_->read(&(pipeline_->GetInputBuffer()),
       &color_updated, &depth_updated);
+    // TODO: read just color or depth, not both.
     if (color_updated || depth_updated) {
-      pipeline_->NotifyInputUpdated(color_updated, depth_updated);
+      if (color_updated) {
+        pipeline_->NotifyColorUpdated();
+      } else if (depth_updated) {
+        pipeline_->NotifyDepthUpdated();
+      }
     } else if (FLAGS_sm_input_type == "file") {
       // TODO: report end of file correctly.
       read_input_timer_->stop();

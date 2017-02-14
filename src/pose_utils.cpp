@@ -33,7 +33,7 @@ std::vector<PoseFrame> LoadPoseHistory(const std::string& filename,
   PoseInputStream input_stream(filename.c_str());
   if (input_stream.isValid()) {
     PoseFrame p;
-    p.method = PoseFrame::EstimationMethod::NONE;
+    p.method = PoseFrame::EstimationMethod::PRECOMPUTED;
     while (input_stream.read(p.frame_index, p.timestamp_ns,
       p.color_camera_from_world.rotation,
       p.color_camera_from_world.translation)) {

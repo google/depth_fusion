@@ -11,39 +11,39 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef CUBE_FIDUCIAL_H
-#define CUBE_FIDUCIAL_H
+#ifndef SINGLE_MARKER_FIDUCIAL_H
+#define SINGLE_MARKER_FIDUCIAL_H
 
 #include <opencv2/aruco.hpp>
 
-#include "libcgt/core/vecmath/Box3f.h"
+#include "libcgt/core/vecmath/Rect2f.h"
 #include "libcgt/GL/GL_45/drawables/Drawable.h"
 #include "libcgt/GL/GL_45/GLTexture2D.h"
 
-// A cubical fiducial marker. It is a subclass of cv::aruco::Board, which
+// A single fiducial marker. It is a subclass of cv::aruco::Board, which
 // represents the data needed for any kind of 3D fiducial, not just planar
 // ones.
-class CubeFiducial : public cv::aruco::Board {
+class SingleMarkerFiducial : public cv::aruco::Board {
  public:
 
-  static constexpr int kNumMarkers = 6;
+  static constexpr int kNumMarkers = 1;
   static constexpr int kNumPointsPerMarker = 4;
-  static constexpr float kDefaultSideLength = 0.064f;  // 64 mm.
+  static constexpr float kDefaultSideLength = 0.1524f;  // 6 inches, 152.4 mm.
 
-  CubeFiducial(float side_length = kDefaultSideLength);
-  CubeFiducial(const Box3f& box);
+  SingleMarkerFiducial(float side_length = kDefaultSideLength, int id = 0);
 
-  // TODO: oriented box?
-  const Box3f box_;
+  // TODO: oriented rect
+  const Rect2f rect_;
 };
 
+#if 0
 // Must be instantiated when an OpenGL context is active.
-class CubeFiducialDrawable : public GLDrawable {
+class SingleMarkerFiducialDrawable : public GLDrawable {
  public:
 
   static constexpr int kDefaultFaceSizeTexels = 128;
 
-  CubeFiducialDrawable(const CubeFiducial& fiducial,
+  SingleMarkerFiducialDrawable(const SingleMarkerFiducial& fiducial,
     int face_size_texels = kDefaultFaceSizeTexels);
 
   const GLTexture2D& texture() const;
@@ -53,5 +53,6 @@ class CubeFiducialDrawable : public GLDrawable {
   static PlanarVertexBufferCalculator calculator();
   GLTexture2D texture_;
 };
+#endif
 
-#endif  // CUBE_FIDUCIAL_H
+#endif  // SINGLE_MARKER_FIDUCIAL_H
