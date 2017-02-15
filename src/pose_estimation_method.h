@@ -11,22 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef POSE_FRAME_H
-#define POSE_FRAME_H
+#ifndef POSE_ESTIMATION_METHOD_H
+#define POSE_ESTIMATION_METHOD_H
 
 #include <cstdint>
 
-#include "libcgt/core/vecmath/EuclideanTransform.h"
+enum class PoseEstimationMethod : uint32_t
+{
+  NONE = 0,
 
-struct PoseFrame {
+  PRECOMPUTED = 1,
+  PRECOMPUTED_REFINE_WITH_DEPTH_ICP = 2,
 
-  using EuclideanTransform = libcgt::core::vecmath::EuclideanTransform;
+  COLOR_ARUCO = 32,
 
-  int32_t frame_index = 0;
-  int64_t timestamp_ns = 0;
+  DEPTH_ICP = 128,
 
-  EuclideanTransform color_camera_from_world;
-  EuclideanTransform depth_camera_from_world;
+  COLOR_ARUCO_AND_DEPTH_ICP = 256
 };
 
-#endif  // POSE_FRAME_H
+#endif  // POSE_ESTIMATION_METHOD_H

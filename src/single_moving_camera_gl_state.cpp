@@ -180,7 +180,6 @@ void SingleMovingCameraGLState::Render(const PerspectiveCamera& free_camera) {
     color_texture_.set(input_buffer.color_rgb);
   }
 
-  // TODO: don't update this is color visualization is not on.
   if (notZero(
     changed_pipeline_data_type_ & PipelineDataType::POSE_ESTIMATION_VIS)) {
     printf("Updating color pose estimation vis\n");

@@ -85,6 +85,7 @@ void MainWidget::addCameraPath(const std::vector<EuclideanTransform>& poses,
   for (int i = 0; i < poses.size(); ++i)
   {
     PerspectiveCamera camera;
+    // TODO: replace hacky depth range with constants.
     camera.setFrustum(parameters.intrinsics, Vector2f(parameters.resolution),
       0.02f, 0.1f );
     camera.setCameraFromWorld( poses[ i ] );
