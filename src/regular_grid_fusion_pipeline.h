@@ -64,6 +64,7 @@ class RegularGridFusionPipeline : public QObject {
 
   const RGBDCameraParameters& GetCameraParameters() const;
   const CubeFiducial& GetArucoCubeFiducial() const;
+  const SingleMarkerFiducial& GetArucoSingleMarkerFiducial() const;
 
   // Get a mutable reference to the input buffer. Clients should update the
   // values in the input buffer then call NotifyInputUpdated();
@@ -72,12 +73,6 @@ class RegularGridFusionPipeline : public QObject {
   // Get a read-only view of the latest color pose estimator's visualization.
   // TODO: this buffer is y-up but BGR format.
   Array2DReadView<uint8x3> GetColorPoseEstimatorVisualization() const;
-
-  // TODO: refactor into separate NotifyColorUpdated(), NotifyDepthUpdated()
-  // calls. It is possible that they are synchronized: they have the same frame
-  // index and very similar times. However, they are unlikely to be exactly the
-  // same.
-  //void NotifyInputUpdated(bool color_updated, bool depth_updated);
 
   void NotifyColorUpdated();
 
@@ -92,6 +87,7 @@ class RegularGridFusionPipeline : public QObject {
   // grid coordinates [0, resolution]^3 (in samples).
   const SimilarityTransform& TSDFWorldFromGridTransform() const;
 
+  // TODO: get rid of these.
   PerspectiveCamera ColorCamera() const;
   PerspectiveCamera DepthCamera() const;
 
@@ -134,9 +130,9 @@ class RegularGridFusionPipeline : public QObject {
    bool UpdatePoseWithColorCamera();
 
    // Try to estimate the rgbd camera pose using the latest depth frame of the
-   // pipeline's input buffer. If it succeeded, it will be appended to the
-   // pose history and returns true. Otherwise, returns false.
-   bool UpdatePoseWithDepthCamera();
+   // pipeline's input buffer. If it succeeded, returns true and writes the
+   // result in pose_frame_out. Otherwise, returns false.
+   bool UpdatePoseWithDepthCamera(PoseFrame* pose_frame_out);
 
   // CPU input buffers.
   InputBuffer input_buffer_;
@@ -164,7 +160,7 @@ class RegularGridFusionPipeline : public QObject {
 
   RegularGridTSDF regular_grid_;
 
-  // TODO: move this into PoseEstimator?
+  // TODO: consider removing this.
   const int kMaxSuccessiveFailuresBeforeReset = 1000;
   int num_successive_failures_ = 0;
   ProjectivePointPlaneICP icp_;

@@ -36,6 +36,7 @@ class SingleMarkerFiducial : public cv::aruco::Board {
   const Rect2f rect_;
 };
 
+// TODO: implement me.
 #if 0
 // Must be instantiated when an OpenGL context is active.
 class SingleMarkerFiducialDrawable : public GLDrawable {

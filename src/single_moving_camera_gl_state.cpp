@@ -457,8 +457,7 @@ void SingleMovingCameraGLState::DrawInputsAndIntermediates() {
   textures.push_back(
     RemappedTexture {
       &color_tracking_vis_texture_,
-      //Vector2f{ 0.5f, 0.5f },
-      Vector2f{ 1.0f },
+      Vector2f{ 0.5f, 0.5f },
       Matrix4f::identity()
     }
   );

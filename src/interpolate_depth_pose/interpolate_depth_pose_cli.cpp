@@ -1,5 +1,6 @@
 #include <vector>
 
+#include <gflags/gflags.h>
 #include "libcgt/camera_wrappers/PoseStream.h"
 #include "libcgt/camera_wrappers/RGBDStream.h"
 #include "libcgt/core/math/MathUtils.h"
@@ -17,6 +18,17 @@ using libcgt::camera_wrappers::RGBDInputStream;
 using libcgt::core::math::fraction;
 using libcgt::core::vecmath::EuclideanTransform;
 using libcgt::core::vecmath::lerp;
+
+DEFINE_string(calibration_dir, "",
+  "calibration directory for the RGBD camera.");
+
+DEFINE_string(reference_pose, "", "Reference camera path file (.pose).");
+
+DEFINE_string(input_rgbd, "", "Input RGBD stream file (.rgbd) whose depth"
+  " positions should be interpolated.");
+
+DEFINE_string(output_merged_pose, "", "Filename (.pose) for merged output"
+  " stream.");
 
 struct PoseFrame {
   int32_t frame_index;
@@ -78,9 +90,30 @@ float fraction(int64_t x, int64_t lo, int64_t size) {
 }
 
 int main(int argc, char* argv[]) {
-  RGBDCameraParameters params = LoadRGBDCameraParameters("d:/tmp/slf/asus_calib_00000");
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  if (FLAGS_calibration_dir == "") {
+    printf("calibration_dir is required.\n");
+    return 1;
+  }
+  if (FLAGS_reference_pose == "") {
+    printf("reference_pose is required.\n");
+  }
+  if (FLAGS_reference_pose == "") {
+    printf("reference_pose is required.\n");
+  }
+  if (FLAGS_input_rgbd == "") {
+    printf("input_rgbd is required.\n");
+    return 1;
+  }
+  if (FLAGS_output_merged_pose == "") {
+    printf("output_merged_pose is required.\n");
+    return 1;
+  }
+
+  RGBDCameraParameters params =
+    LoadRGBDCameraParameters(FLAGS_calibration_dir);
   PoseStreamMetadata input_metadata;
-  auto sfm_aligned_poses = LoadPoses("d:/tmp/slf/still_life_00002/sfm.aligned.pose", input_metadata);
+  auto sfm_aligned_poses = LoadPoses(FLAGS_reference_pose, input_metadata);
   int num_sfm_poses = static_cast<int>(sfm_aligned_poses.size());
 
   std::vector<int64_t> sfm_aligned_timestamps(sfm_aligned_poses.size());
@@ -88,7 +121,7 @@ int main(int argc, char* argv[]) {
     sfm_aligned_timestamps[i] = sfm_aligned_poses[i].timestamp;
   }
 
-  auto depth_timestamps = LoadDepthTimestamps("d:/tmp/slf/still_life_00002/still_life_00002.rgbd");
+  auto depth_timestamps = LoadDepthTimestamps(FLAGS_input_rgbd);
   int num_depth_timestamps = static_cast<int>(depth_timestamps.size());
 
   std::vector<PoseFrame> depth_poses;
@@ -99,8 +132,11 @@ int main(int argc, char* argv[]) {
 
     // Find the pair of timestamps in sfm_aligned_poses bracketing
     // depth_timestamp.
-    int lbIndex = std::lower_bound(sfm_aligned_timestamps.begin(),
-      sfm_aligned_timestamps.end(), depth_pose.timestamp) - sfm_aligned_timestamps.begin();
+    int lbIndex = static_cast<int>(
+      std::lower_bound(sfm_aligned_timestamps.begin(),
+                       sfm_aligned_timestamps.end(),
+                       depth_pose.timestamp) -
+      sfm_aligned_timestamps.begin());
 
     // Lower bound is past the edge, do nothing.
     if (lbIndex == num_sfm_poses) {
@@ -134,14 +170,10 @@ int main(int argc, char* argv[]) {
   std::vector<PoseFrame> merged_poses(num_sfm_poses + depth_poses.size());
   std::merge(sfm_aligned_poses.begin(), sfm_aligned_poses.end(),
     depth_poses.begin(), depth_poses.end(),
-    merged_poses.begin(),
-    [&] (const PoseFrame& x, const PoseFrame& y) {
-      return x.timestamp < y.timestamp;
-    });
+    merged_poses.begin(), less);
 
   PoseStreamMetadata output_metadata = input_metadata;
-  PoseOutputStream output_stream(output_metadata,
-    "d:/tmp/slf/still_life_00002/sfm_aligned_with_lerp_depth.pose");
+  PoseOutputStream output_stream(output_metadata, FLAGS_output_merged_pose);
   for (PoseFrame p : merged_poses) {
     output_stream.write(p.frame_index, p.timestamp,
       p.e.rotation, p.e.translation);
