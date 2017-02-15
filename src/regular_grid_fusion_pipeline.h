@@ -87,6 +87,7 @@ class RegularGridFusionPipeline : public QObject {
   // grid coordinates [0, resolution]^3 (in samples).
   const SimilarityTransform& TSDFWorldFromGridTransform() const;
 
+  // TODO: get rid of these.
   PerspectiveCamera ColorCamera() const;
   PerspectiveCamera DepthCamera() const;
 
@@ -129,9 +130,9 @@ class RegularGridFusionPipeline : public QObject {
    bool UpdatePoseWithColorCamera();
 
    // Try to estimate the rgbd camera pose using the latest depth frame of the
-   // pipeline's input buffer. If it succeeded, it will be appended to the
-   // pose history and returns true. Otherwise, returns false.
-   bool UpdatePoseWithDepthCamera();
+   // pipeline's input buffer. If it succeeded, returns true and writes the
+   // result in pose_frame_out. Otherwise, returns false.
+   bool UpdatePoseWithDepthCamera(PoseFrame* pose_frame_out);
 
   // CPU input buffers.
   InputBuffer input_buffer_;
@@ -159,7 +160,7 @@ class RegularGridFusionPipeline : public QObject {
 
   RegularGridTSDF regular_grid_;
 
-  // TODO: move this into PoseEstimator?
+  // TODO: consider removing this.
   const int kMaxSuccessiveFailuresBeforeReset = 1000;
   int num_successive_failures_ = 0;
   ProjectivePointPlaneICP icp_;
