@@ -140,25 +140,25 @@ target_link_libraries( depth_fusion
     cgt_qt_interop	
 )
 
-# align_nvm_pose executable
-add_executable( align_nvm_pose
-    src/align_nvm_pose/align_nvm_pose.cpp
+# align_nvm_pose_cli executable
+add_executable( align_nvm_pose_cli
+    src/align_nvm_pose/align_nvm_pose_cli.cpp
 )
-target_include_directories( align_nvm_pose PRIVATE . )
-target_link_libraries( align_nvm_pose
+target_include_directories( align_nvm_pose_cli PRIVATE . )
+target_link_libraries( align_nvm_pose_cli
     gflags
 	cgt_core
     cgt_camera_wrappers
 )
 
-# interpolate_depth_pose executable
-add_executable( interpolate_depth_pose
-    src/interpolate_depth_pose/interpolate_depth_pose.cpp
+# interpolate_depth_pose_cli executable
+add_executable( interpolate_depth_pose_cli
+    src/interpolate_depth_pose/interpolate_depth_pose_cli.cpp
 	src/rgbd_camera_parameters.h
 	src/rgbd_camera_parameters.cpp
 )
-target_include_directories( interpolate_depth_pose PRIVATE . )
-target_link_libraries( interpolate_depth_pose
+target_include_directories( interpolate_depth_pose_cli PRIVATE . )
+target_link_libraries( interpolate_depth_pose_cli
     gflags
 	${OpenCV_LIBS}
 	cgt_core
@@ -166,14 +166,15 @@ target_link_libraries( interpolate_depth_pose
 	cgt_opencv_interop
 )
 
-# rgbd2pose executable
-# TODO: rename rgbd2pose --> rgbd2arucopose?
-add_executable( rgbd2pose
-    src/rgbd2pose.cpp
+# aruco_estimate_pose_cli executable
+add_executable( aruco_estimate_pose_cli
+    src/aruco/aruco_estimate_pose_cli.cpp
 	src/aruco/aruco_pose_estimator.h
 	src/aruco/aruco_pose_estimator.cpp
 	src/aruco/cube_fiducial.h
 	src/aruco/cube_fiducial.cpp
+	src/aruco/single_marker_fiducial.h
+	src/aruco/single_marker_fiducial.cpp
 	src/input_buffer.h
 	src/input_buffer.cpp
 	src/rgbd_camera_parameters.h
@@ -181,8 +182,8 @@ add_executable( rgbd2pose
 	src/rgbd_input.h
 	src/rgbd_input.cpp
 )
-target_include_directories( rgbd2pose PRIVATE . )
-target_link_libraries( rgbd2pose
+target_include_directories( aruco_estimate_pose_cli PRIVATE . )
+target_link_libraries( aruco_estimate_pose_cli
     gflags
     opengl32 GLEW::GLEW
     Qt5::Core Qt5::OpenGL Qt5::Widgets
@@ -195,14 +196,14 @@ target_link_libraries( rgbd2pose
     cgt_qt_interop	
 )
 
-add_executable( visualize_camera_path
+add_executable( visualize_camera_path_cli
 	src/rgbd_camera_parameters.h
 	src/rgbd_camera_parameters.cpp
 	src/visualize_camera_path/main_widget.h
 	src/visualize_camera_path/main_widget.cpp
-    src/visualize_camera_path/visualize_camera_path.cpp )
-target_include_directories( visualize_camera_path PRIVATE . )
-target_link_libraries( visualize_camera_path
+    src/visualize_camera_path/visualize_camera_path_cli.cpp )
+target_include_directories( visualize_camera_path_cli PRIVATE . )
+target_link_libraries( visualize_camera_path_cli
     gflags
     opengl32 GLEW::GLEW
     Qt5::Core Qt5::OpenGL Qt5::Widgets

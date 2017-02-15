@@ -64,6 +64,7 @@ class RegularGridFusionPipeline : public QObject {
 
   const RGBDCameraParameters& GetCameraParameters() const;
   const CubeFiducial& GetArucoCubeFiducial() const;
+  const SingleMarkerFiducial& GetArucoSingleMarkerFiducial() const;
 
   // Get a mutable reference to the input buffer. Clients should update the
   // values in the input buffer then call NotifyInputUpdated();
@@ -72,12 +73,6 @@ class RegularGridFusionPipeline : public QObject {
   // Get a read-only view of the latest color pose estimator's visualization.
   // TODO: this buffer is y-up but BGR format.
   Array2DReadView<uint8x3> GetColorPoseEstimatorVisualization() const;
-
-  // TODO: refactor into separate NotifyColorUpdated(), NotifyDepthUpdated()
-  // calls. It is possible that they are synchronized: they have the same frame
-  // index and very similar times. However, they are unlikely to be exactly the
-  // same.
-  //void NotifyInputUpdated(bool color_updated, bool depth_updated);
 
   void NotifyColorUpdated();
 

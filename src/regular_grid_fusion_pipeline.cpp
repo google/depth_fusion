@@ -87,7 +87,6 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
        camera_params.depth.depth_range),
 
-  //aruco_pose_estimator_(aruco_cube_fiducial_, camera_params.color,
   aruco_single_marker_fiducial_(SingleMarkerFiducial::kDefaultSideLength,
     kSingleMarkerFiducialId),
   aruco_pose_estimator_(aruco_single_marker_fiducial_, camera_params.color,
@@ -111,6 +110,11 @@ RegularGridFusionPipeline::GetCameraParameters() const {
 
 const CubeFiducial& RegularGridFusionPipeline::GetArucoCubeFiducial() const {
   return aruco_cube_fiducial_;
+}
+
+const SingleMarkerFiducial&
+RegularGridFusionPipeline::GetArucoSingleMarkerFiducial() const {
+  return aruco_single_marker_fiducial_;
 }
 
 PerspectiveCamera RegularGridFusionPipeline::ColorCamera() const {
@@ -147,15 +151,15 @@ void RegularGridFusionPipeline::NotifyColorUpdated() {
   if (pose_estimator_options_.method == PoseEstimationMethod::PRECOMPUTED ||
     pose_estimator_options_.method ==
     PoseEstimationMethod::PRECOMPUTED_REFINE_WITH_DEPTH_ICP) {
-    auto color_itr = FindPoseFrame(pose_estimator_options_.precomputed_path,
+    auto itr = FindPoseFrame(pose_estimator_options_.precomputed_path,
       input_buffer_.color_timestamp_ns);
-    if (color_itr != pose_estimator_options_.precomputed_path.end()) {
+    if (itr != pose_estimator_options_.precomputed_path.end()) {
       data_changed |= PipelineDataType::CAMERA_POSE;
-      pose_history_.push_back(*color_itr);
+      pose_history_.push_back(*itr);
       pose_updated = true;
     }
-  } else if (
-    pose_estimator_options_.method == PoseEstimationMethod::COLOR_ARUCO ||
+  } else if (pose_estimator_options_.method ==
+    PoseEstimationMethod::COLOR_ARUCO ||
     pose_estimator_options_.method ==
       PoseEstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP) {
     if (UpdatePoseWithColorCamera()) {
@@ -187,7 +191,6 @@ void RegularGridFusionPipeline::NotifyDepthUpdated() {
   bool pose_updated = false;
   PoseEstimationMethod method = pose_estimator_options_.method;
 
-  // TODO: PRECOMPUTED_REFINE_WITH_DEPTH_ICP
   if (method == PoseEstimationMethod::PRECOMPUTED) {
     auto itr = FindPoseFrame(pose_estimator_options_.precomputed_path,
       input_buffer_.depth_timestamp_ns);
@@ -195,6 +198,28 @@ void RegularGridFusionPipeline::NotifyDepthUpdated() {
       data_changed |= PipelineDataType::CAMERA_POSE;
       pose_history_.push_back(*itr);
       pose_updated = true;
+    }
+  } else if (pose_estimator_options_.method ==
+    PoseEstimationMethod::PRECOMPUTED_REFINE_WITH_DEPTH_ICP) {
+    auto itr = FindPoseFrame(pose_estimator_options_.precomputed_path,
+      input_buffer_.color_timestamp_ns);
+    if (itr != pose_estimator_options_.precomputed_path.end()) {
+      pose_history_.push_back(*itr);
+      if (is_first_depth_frame_) {
+        data_changed |= PipelineDataType::CAMERA_POSE;
+        is_first_depth_frame_ = false;
+        pose_updated = true;
+      } else {
+        pose_updated = UpdatePoseWithDepthCamera();
+        if (pose_updated) {
+          // HACK
+          pose_history_.erase(pose_history_.end() - 2);
+          data_changed |= PipelineDataType::CAMERA_POSE;
+        } else {
+          // HACK
+          pose_history_.pop_back();
+        }
+      }
     }
   } else if (method == PoseEstimationMethod::DEPTH_ICP) {
     // In DEPTH_ICP mode, if it's the very first depth frame, use the provided

@@ -18,7 +18,6 @@
 #include <gflags/gflags.h>
 #include "libcgt/camera_wrappers/PoseStream.h"
 #include "libcgt/core/io/File.h"
-#include "libcgt/core/math/Random.h"
 #include "libcgt/core/vecmath/EuclideanTransform.h"
 #include "libcgt/core/vecmath/SimilarityTransform.h"
 #include "libcgt/core/vecmath/Quat4f.h"
@@ -36,13 +35,14 @@ using libcgt::camera_wrappers::PoseStreamTransformDirection;
 using libcgt::camera_wrappers::PoseStreamUnits;
 using libcgt::camera_wrappers::PoseOutputStream;
 
-DEFINE_string(nvm, "", "Input .nvm file.");
-DEFINE_string(input_pose, "", "Input .pose file.");
+// TODO: call this input_pose and support either .nvm or .pose.
+DEFINE_string(nvm, "", "Input .nvm file containing input (non-metric) poses. "
+  "These poses will be moved to those of the reference.");
+DEFINE_string(reference_pose, "", "Reference (metric) pose file. "
+  "These poses will not move.");
 DEFINE_string(output_pose, "", "Output .pose file.");
 
-// TODO: consider reading two pose files instead.
-
-// TODO: bool?
+// TODO: bool succeeded?
 std::pair<int32_t, int64_t> parseTimestampFromFilename(
   const std::string& filename) {
   std::string basename = pystring::os::path::basename(filename);
@@ -64,7 +64,18 @@ Matrix4f fromEigen( const Eigen::Matrix4f& e )
 
 int main(int argc, char* argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  // TODO: validate input and output
+  if (FLAGS_nvm == "") {
+    printf("nvm is required.\n");
+    return 1;
+  }
+  if (FLAGS_reference_pose == "") {
+    printf("reference_pose is required.\n");
+    return 1;
+  }
+  if (FLAGS_output_pose == "") {
+    printf("output_pose is required.\n");
+    return 1;
+  }
 
   // Load NVM into memory.
   std::vector<std::string> nvm =
@@ -117,29 +128,28 @@ int main(int argc, char* argv[]) {
     nvm_poses_cfw[ft.second] = rot180 * e * rot180;
   }
 
-  PoseInputStream input_pose_stream(FLAGS_input_pose.c_str());
-  // TODO: if (input_stream.isValid)...
+  PoseInputStream reference_pose_stream(FLAGS_reference_pose.c_str());
 
-  std::unordered_map<int64_t, EuclideanTransform> input_poses_cfw;
+  std::unordered_map<int64_t, EuclideanTransform> reference_poses_cfw;
   int32_t frame_index;
   int64_t timestamp;
   EuclideanTransform e;
 
   // TODO: check the right format: it might be a quaternion, etc
   // TODO: check that the read succeeds.
-  bool ok = input_pose_stream.read(frame_index, timestamp, e.rotation, e.translation);
+  bool ok = reference_pose_stream.read(frame_index, timestamp, e.rotation, e.translation);
   while (ok) {
-    if (input_pose_stream.metadata().direction ==
+    if (reference_pose_stream.metadata().direction ==
       PoseStreamTransformDirection::WORLD_FROM_CAMERA) {
-      input_poses_cfw.insert({timestamp, inverse(e)});
+      reference_poses_cfw.insert({timestamp, inverse(e)});
     } else {
-      input_poses_cfw.insert({timestamp, e});
+      reference_poses_cfw.insert({timestamp, e});
     }
-    ok = input_pose_stream.read(frame_index, timestamp, e.rotation, e.translation);
+    ok = reference_pose_stream.read(frame_index, timestamp, e.rotation, e.translation);
   }
 
   // TODO: iterate over which ever is smaller.
-  std::vector<Vector3f> input_world_points;
+  std::vector<Vector3f> reference_world_points;
   std::vector<Vector3f> nvm_world_points;
 
   const Vector3f origin( 0 );
@@ -147,48 +157,48 @@ int main(int argc, char* argv[]) {
   const Vector3f basis_y( 0, 1, 0 );
   const Vector3f basis_z( 0, 0, 1 );
 
-  for (const auto& kvp : input_poses_cfw) {
+  for (const auto& kvp : reference_poses_cfw) {
     int64_t timestamp = kvp.first;
-    const EuclideanTransform& input_pose_cfw = kvp.second;
+    const EuclideanTransform& reference_pose_cfw = kvp.second;
     auto nvm_itr = nvm_poses_cfw.find(timestamp);
     if (nvm_itr != nvm_poses_cfw.end()) {
       const EuclideanTransform& nvm_pose_cfw = nvm_itr->second;
 
-      input_world_points.push_back(transformPoint(inverse(input_pose_cfw), origin));
+      reference_world_points.push_back(transformPoint(inverse(reference_pose_cfw), origin));
       nvm_world_points.push_back(transformPoint(inverse(nvm_pose_cfw), origin));
     }
   }
 
-  int num_points = static_cast<int>(input_world_points.size());
-  Eigen::MatrixXf input_world_points_matrix(3, num_points);
+  int num_points = static_cast<int>(reference_world_points.size());
+  Eigen::MatrixXf reference_world_points_matrix(3, num_points);
   Eigen::MatrixXf nvm_world_points_matrix(3, num_points);
   for (int j = 0; j < num_points; ++j) {
     for (int i = 0; i < 3; ++i) {
-      input_world_points_matrix(i, j) = input_world_points[j][i];
+      reference_world_points_matrix(i, j) = reference_world_points[j][i];
       nvm_world_points_matrix(i, j) = nvm_world_points[j][i];
     }
   }
 
-  // Now compute the alignment: find nvm_world_from_input_world.
-  Eigen::MatrixXf nvm_world_from_input_world_matrix_eigen = Eigen::umeyama(
-    input_world_points_matrix /* src */,
+  // Now compute the alignment: find nvm_world_from_reference_world.
+  Eigen::MatrixXf nvm_world_from_reference_world_matrix_eigen = Eigen::umeyama(
+    reference_world_points_matrix /* src */,
     nvm_world_points_matrix /* dst */ );
 
   std::cout << "umemaya found transformation:\n" <<
-    nvm_world_from_input_world_matrix_eigen << "\n";
+    nvm_world_from_reference_world_matrix_eigen << "\n";
 
-  Matrix4f nvm_world_from_input_world_matrix =
-    fromEigen(nvm_world_from_input_world_matrix_eigen);
-  SimilarityTransform nvm_world_from_input_world =
-    SimilarityTransform::fromMatrix(nvm_world_from_input_world_matrix);
-  std::cout << "solved scale is: " << nvm_world_from_input_world.scale << "\n";
-  std::cout << "solved rotation determinant is: " <<
-    nvm_world_from_input_world.rotation().determinant() << "\n";
+  Matrix4f nvm_world_from_reference_world_matrix =
+    fromEigen(nvm_world_from_reference_world_matrix_eigen);
+  SimilarityTransform nvm_world_from_reference_world =
+    SimilarityTransform::fromMatrix(nvm_world_from_reference_world_matrix);
+  std::cout << "Solved scale is: " << nvm_world_from_reference_world.scale << "\n";
+  std::cout << "Solved rotation determinant is: " <<
+    nvm_world_from_reference_world.rotation().determinant() << "\n";
 
   PoseStreamMetadata output_metadata;
   output_metadata.format = PoseStreamFormat::ROTATION_MATRIX_3X3_COL_MAJOR_AND_TRANSLATION_VECTOR_FLOAT;
   output_metadata.direction = PoseStreamTransformDirection::CAMERA_FROM_WORLD;
-  output_metadata.units = input_pose_stream.metadata().units;
+  output_metadata.units = reference_pose_stream.metadata().units;
   PoseOutputStream pose_output_stream(
     output_metadata,
     FLAGS_output_pose.c_str());
@@ -199,23 +209,24 @@ int main(int argc, char* argv[]) {
     int64_t timestamp = ft.second;
     const EuclideanTransform& nvm_pose_cfw = nvm_poses_cfw[timestamp];
 
-    // x_{nvm,cam} <-- S * x_{input,world}
-    SimilarityTransform cam_from_input_world_sim =
-      compose(SimilarityTransform(nvm_pose_cfw), nvm_world_from_input_world);
+    // x_{nvm,cam} <-- S * x_{reference,world}
+    SimilarityTransform cam_from_reference_world_sim = compose(
+      SimilarityTransform(nvm_pose_cfw), nvm_world_from_reference_world);
 
-    EuclideanTransform cam_from_input_world_euc(
-      cam_from_input_world_sim.rotation(),
-      cam_from_input_world_sim.translation() / cam_from_input_world_sim.scale);
+    EuclideanTransform cam_from_reference_world_euc(
+      cam_from_reference_world_sim.rotation(),
+      cam_from_reference_world_sim.translation() /
+      cam_from_reference_world_sim.scale);
 
     // TODO: write should check that what's coming is is the same as what the
     // header format says.
     pose_output_stream.write(frame_index, timestamp,
-      cam_from_input_world_euc.rotation,
-      cam_from_input_world_euc.translation);
+      cam_from_reference_world_euc.rotation,
+      cam_from_reference_world_euc.translation);
 
-    const auto& itr = input_poses_cfw.find(timestamp);
-    if (itr != input_poses_cfw.end()) {
-      const EuclideanTransform& input_pose_cfw = itr->second;
+    const auto& itr = reference_poses_cfw.find(timestamp);
+    if (itr != reference_poses_cfw.end()) {
+      const EuclideanTransform& reference_pose_cfw = itr->second;
     }
   }
 

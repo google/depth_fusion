@@ -6,13 +6,13 @@
 #include "libcgt/core/vecmath/EuclideanTransform.h"
 #include "libcgt/camera_wrappers/PoseStream.h"
 
-#include "rgbd_camera_parameters.h"
-#include "rgbd_input.h"
-#include "input_buffer.h"
+#include "src/rgbd_camera_parameters.h"
+#include "src/rgbd_input.h"
+#include "src/input_buffer.h"
 
-#include "aruco/aruco_pose_estimator.h"
-#include "aruco/cube_fiducial.h"
-#include "aruco/single_marker_fiducial.h"
+#include "src/aruco/aruco_pose_estimator.h"
+#include "src/aruco/cube_fiducial.h"
+#include "src/aruco/single_marker_fiducial.h"
 
 using libcgt::camera_wrappers::PoseInputStream;
 using libcgt::camera_wrappers::PoseOutputStream;
@@ -60,7 +60,12 @@ int main(int argc, char* argv[]) {
     camera_params.color.resolution,
     camera_params.depth.resolution);
 
-  CubeFiducial fiducial;
+  // TODO: let the user specify which fiducial.
+  float side_length = SingleMarkerFiducial::kDefaultSideLength;
+  int single_marker_id = 3;
+  printf("Using single marker fiducial with side length %f m, id = %d\n",
+    side_length, single_marker_id);
+  SingleMarkerFiducial fiducial(side_length, single_marker_id);
   ArucoPoseEstimator pose_estimator(
     fiducial,
     camera_params.color,
@@ -83,7 +88,6 @@ int main(int argc, char* argv[]) {
       auto result = pose_estimator.EstimatePose(input_buffer.color_bgr_ydown);
       if (result.valid) {
         auto cfw = inverse(result.world_from_camera);
-        printf("translation = %s\n", result.world_from_camera.translation.toString().c_str());
         output_stream.write(
           input_buffer.color_frame_index,
           input_buffer.color_timestamp_ns,

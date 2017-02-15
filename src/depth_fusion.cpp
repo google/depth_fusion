@@ -55,7 +55,8 @@ DEFINE_string(sm_input_args, "",
 DEFINE_string(sm_pose_estimator, "color_aruco_and_depth_icp",
   "REQUIRED for single moving mode: "
   "Pose estimator. Valid options: \"color_aruco\", \"depth_icp\", "
-  "\"color_aruco_and_depth_icp\", or \"precomputed\". "
+  "\"color_aruco_and_depth_icp\", \"precomputed\" or "
+  "\"precomputed_refine_with_depth_icp\"."
   "If \"precomputed\", sm_pose_file is required.");
 DEFINE_string(sm_pose_file, "",
   "Filename for precomputed pose path.");
@@ -147,19 +148,18 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
     pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
       kRegularGridResolution, kInitialWorldFromGrid,
       pose_options);
-  } else if (FLAGS_sm_pose_estimator == "precomputed") {
+  } else if (FLAGS_sm_pose_estimator == "precomputed" ||
+    FLAGS_sm_pose_estimator == "precomputed_refine_with_depth_icp") {
     // Put the origin at the bottom in y, centered in x and z.
-#if 0
     const SimilarityTransform kInitialWorldFromGrid =
       SimilarityTransform(Vector3f(-0.5f * kRegularGridSideLength, 0.0f, -0.5f * kRegularGridSideLength)) *
       SimilarityTransform(kRegularGridVoxelSize);
-#else
-    const SimilarityTransform kInitialWorldFromGrid =
-      SimilarityTransform(Vector3f(-0.5f * kRegularGridSideLength, -0.75f * kRegularGridSideLength, -0.5f * kRegularGridSideLength)) *
-      SimilarityTransform(kRegularGridVoxelSize);
-#endif
 
-    pose_options.method = PoseEstimationMethod::PRECOMPUTED;
+    if (FLAGS_sm_pose_estimator == "precomputed") {
+      pose_options.method = PoseEstimationMethod::PRECOMPUTED;
+    } else {
+      pose_options.method = PoseEstimationMethod::PRECOMPUTED_REFINE_WITH_DEPTH_ICP;
+    }
     pose_options.precomputed_path = LoadPoseHistory(FLAGS_sm_pose_file,
       camera_params.depth_from_color);
     if (pose_options.precomputed_path.size() == 0) {
