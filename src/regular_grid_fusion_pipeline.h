@@ -31,8 +31,20 @@
 #include "depth_processor.h"
 #include "input_buffer.h"
 #include "pipeline_data_type.h"
+#include "pose_estimation_method.h"
 #include "pose_frame.h"
 #include "projective_point_plane_icp.h"
+
+struct PoseEstimatorOptions {
+  PoseEstimationMethod method =
+    PoseEstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP;
+
+  // Required if method is DEPTH_ICP.
+  PoseFrame initial_pose = PoseFrame{};
+
+  // Required if method is PRECOMPUTED or PRECOMPUTED_REFINE_WITH_DEPTH_ICP.
+  std::vector<PoseFrame> precomputed_path;
+};
 
 class RegularGridFusionPipeline : public QObject {
  Q_OBJECT
@@ -42,23 +54,11 @@ class RegularGridFusionPipeline : public QObject {
 
  public:
 
-   // Initial pose only used in in DEPTH_ICP mode.
   RegularGridFusionPipeline(
     const RGBDCameraParameters& camera_params,
     const Vector3i& grid_resolution,
     const SimilarityTransform& world_from_grid,
-    PoseFrame::EstimationMethod pose_estimation_method =
-        PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP,
-    const PoseFrame& initial_pose = PoseFrame{});
-
-  // Construct a pipeline from an existing pose history.
-  // Does no pose estimation.
-  // TODO: do ICP on top.
-  RegularGridFusionPipeline(
-    const RGBDCameraParameters& camera_params,
-    const Vector3i& grid_resolution,
-    const SimilarityTransform& world_from_grid,
-    const std::vector<PoseFrame>& precomputed_pose_history);
+    const PoseEstimatorOptions& pose_estimator_options);
 
   void Reset();
 
@@ -175,12 +175,9 @@ class RegularGridFusionPipeline : public QObject {
   // Visualization of the last pose estimate, y up.
   Array2D<uint8x3> aruco_vis_;
 
-  PoseFrame::EstimationMethod pose_estimation_method_;
-
-  const PoseFrame initial_pose_;
+  PoseEstimatorOptions pose_estimator_options_;
+  bool is_first_depth_frame_ = true;
   std::vector<PoseFrame> pose_history_;
-
-  std::vector<PoseFrame> precomputed_pose_history_;
 
   const RGBDCameraParameters camera_params_;
   // camera_params_.depth_intrinsics_, stored as a Vector4f.

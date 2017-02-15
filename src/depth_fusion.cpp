@@ -55,8 +55,8 @@ DEFINE_string(sm_input_args, "",
 DEFINE_string(sm_pose_estimator, "color_aruco_and_depth_icp",
   "REQUIRED for single moving mode: "
   "Pose estimator. Valid options: \"color_aruco\", \"depth_icp\", "
-  "\"color_aruco_and_depth_icp\", or \"file\". "
-  "If \"file\", sm_pose_file is required.");
+  "\"color_aruco_and_depth_icp\", or \"precomputed\". "
+  "If \"precomputed\", sm_pose_file is required.");
 DEFINE_string(sm_pose_file, "",
   "Filename for precomputed pose path.");
 
@@ -102,6 +102,8 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
 
   std::unique_ptr<RegularGridFusionPipeline> pipeline;
 
+  PoseEstimatorOptions pose_options;
+
   if (FLAGS_sm_pose_estimator == "color_aruco" ||
     FLAGS_sm_pose_estimator == "color_aruco_and_depth_icp") {
     // Put the origin at the center of the cube.
@@ -110,15 +112,14 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
       SimilarityTransform(Vector3f(-0.5f * kRegularGridResolution.x,
         -0.5f * kRegularGridResolution.y, -0.5f * kRegularGridResolution.z));
 
-    PoseFrame::EstimationMethod estimator;
     if (FLAGS_sm_pose_estimator == "color_aruco") {
-      estimator = PoseFrame::EstimationMethod::COLOR_ARUCO;
+      pose_options.method = PoseEstimationMethod::COLOR_ARUCO;
     } else {
-      estimator = PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP;
+      pose_options.method = PoseEstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP;
     }
 
     pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
-      kRegularGridResolution, kInitialWorldFromGrid, estimator);
+      kRegularGridResolution, kInitialWorldFromGrid, pose_options);
   } else if (FLAGS_sm_pose_estimator == "depth_icp") {
 
     // Put the camera at the center of the front face of the cube.
@@ -137,17 +138,16 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
         )
       );
 
-    PoseFrame initial_pose_frame = {};
-    initial_pose_frame.method = PoseFrame::EstimationMethod::FIXED_INITIAL;
-    initial_pose_frame.depth_camera_from_world = kInitialDepthCameraFromWorld;
-    initial_pose_frame.color_camera_from_world =
+    pose_options.method = PoseEstimationMethod::DEPTH_ICP;
+    pose_options.initial_pose.depth_camera_from_world = kInitialDepthCameraFromWorld;
+    pose_options.initial_pose.color_camera_from_world =
       camera_params.ConvertToColorCameraFromWorld(
         kInitialDepthCameraFromWorld);
 
     pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
       kRegularGridResolution, kInitialWorldFromGrid,
-      PoseFrame::EstimationMethod::DEPTH_ICP, initial_pose_frame);
-  } else if (FLAGS_sm_pose_estimator == "file") {
+      pose_options);
+  } else if (FLAGS_sm_pose_estimator == "precomputed") {
     // Put the origin at the bottom in y, centered in x and z.
 #if 0
     const SimilarityTransform kInitialWorldFromGrid =
@@ -159,16 +159,17 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
       SimilarityTransform(kRegularGridVoxelSize);
 #endif
 
-    std::vector<PoseFrame> pose_history = LoadPoseHistory(FLAGS_sm_pose_file,
+    pose_options.method = PoseEstimationMethod::PRECOMPUTED;
+    pose_options.precomputed_path = LoadPoseHistory(FLAGS_sm_pose_file,
       camera_params.depth_from_color);
-    if (pose_history.size() == 0) {
+    if (pose_options.precomputed_path.size() == 0) {
       fprintf(stderr, "Error: failed to load pose history from %s\n",
         FLAGS_sm_pose_file.c_str());
       return 1;
     }
 
     pipeline = std::make_unique<RegularGridFusionPipeline>(camera_params,
-      kRegularGridResolution, kInitialWorldFromGrid, pose_history);
+      kRegularGridResolution, kInitialWorldFromGrid, pose_options);
   }
 
   ControlWidget control_widget;
@@ -201,7 +202,7 @@ using libcgt::opencv_interop::makeCameraMatrix;
 using libcgt::opencv_interop::undistortRectifyMap;
 using libcgt::opencv_interop::toCVSize;
 
-// HACK: this only makes a depth camera.
+// HACK: this only makes a depth camera at 512x424.
 RGBDCameraParameters makeRGBDCameraParameters(double focalLength,
   double principalPointX, double principalPointY,
   double distortionR2, double distortionR4) {

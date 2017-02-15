@@ -76,6 +76,7 @@ set( DEPTH_FUSION_HEADERS
     src/multi_static_camera_gl_state.h
     src/multi_static_camera_pipeline.h
     src/pipeline_data_type.h
+	src/pose_estimation_method.h
     src/pose_frame.h
     src/pose_utils.h
     src/projective_point_plane_icp.h
@@ -148,6 +149,21 @@ target_link_libraries( align_nvm_pose
     gflags
 	cgt_core
     cgt_camera_wrappers
+)
+
+# interpolate_depth_pose executable
+add_executable( interpolate_depth_pose
+    src/interpolate_depth_pose/interpolate_depth_pose.cpp
+	src/rgbd_camera_parameters.h
+	src/rgbd_camera_parameters.cpp
+)
+target_include_directories( interpolate_depth_pose PRIVATE . )
+target_link_libraries( interpolate_depth_pose
+    gflags
+	${OpenCV_LIBS}
+	cgt_core
+    cgt_camera_wrappers
+	cgt_opencv_interop
 )
 
 # rgbd2pose executable

@@ -32,6 +32,7 @@ namespace {
 
 // TODO: also specify a board configuration.
 const char* kArucoDetectorParamsFilename = "../res/detector_params.yaml";
+constexpr int kSingleMarkerFiducialId = 3;
 constexpr bool kDoFusion = true;
 
 std::vector<PoseFrame>::const_iterator FindPoseFrameByFrameIndex(
@@ -58,8 +59,7 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   const RGBDCameraParameters& camera_params,
   const Vector3i& grid_resolution,
   const SimilarityTransform& world_from_grid,
-  PoseFrame::EstimationMethod pose_estimation_method,
-  const PoseFrame& initial_pose) :
+  const PoseEstimatorOptions& pose_estimator_options) :
   depth_meters_(camera_params.depth.resolution),
   smoothed_depth_meters_(camera_params.depth.resolution),
   incoming_camera_normals_(camera_params.depth.resolution),
@@ -82,65 +82,25 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
   depth_processor_(camera_params.depth.intrinsics,
     camera_params.depth.depth_range),
 
-  pose_estimation_method_(pose_estimation_method),
-  initial_pose_(initial_pose),
+  pose_estimator_options_(pose_estimator_options),
 
   icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
        camera_params.depth.depth_range),
 
   //aruco_pose_estimator_(aruco_cube_fiducial_, camera_params.color,
+  aruco_single_marker_fiducial_(SingleMarkerFiducial::kDefaultSideLength,
+    kSingleMarkerFiducialId),
   aruco_pose_estimator_(aruco_single_marker_fiducial_, camera_params.color,
     kArucoDetectorParamsFilename),
   aruco_vis_(camera_params.color.resolution) {
-  if (pose_estimation_method_ == PoseFrame::EstimationMethod::DEPTH_ICP) {
-    assert(initial_pose.method == PoseFrame::EstimationMethod::FIXED_INITIAL);
-  } else {
-    assert(initial_pose.method == PoseFrame::EstimationMethod::NONE);
-  }
-}
-
-RegularGridFusionPipeline::RegularGridFusionPipeline(
-    const RGBDCameraParameters& camera_params,
-    const Vector3i& grid_resolution,
-    const SimilarityTransform& world_from_grid,
-    const std::vector<PoseFrame>& precomputed_pose_history) :
-  depth_meters_(camera_params.depth.resolution),
-  smoothed_depth_meters_(camera_params.depth.resolution),
-  incoming_camera_normals_(camera_params.depth.resolution),
-  world_points_(camera_params.depth.resolution),
-  world_normals_(camera_params.depth.resolution),
-  pose_estimation_vis_(camera_params.depth.resolution),
-
-  input_buffer_(camera_params.color.resolution,
-                camera_params.depth.resolution),
-
-  regular_grid_(grid_resolution, world_from_grid),
-
-  camera_params_(camera_params),
-  depth_intrinsics_flpp_{
-    camera_params.depth.intrinsics.focalLength,
-    camera_params.depth.intrinsics.principalPoint
-  },
-  depth_range_(camera_params.depth.depth_range),
-
-  depth_processor_(camera_params.depth.intrinsics,
-    camera_params.depth.depth_range),
-
-  icp_(camera_params.depth.resolution, camera_params.depth.intrinsics,
-       camera_params.depth.depth_range),
-
-  aruco_pose_estimator_(aruco_cube_fiducial_, camera_params.color,
-    kArucoDetectorParamsFilename),
-
-  precomputed_pose_history_(precomputed_pose_history),
-  pose_estimation_method_(PoseFrame::EstimationMethod::PRECOMPUTED) {
-  assert(precomputed_pose_history_.size() > 0);
+  // TODO: CheckPoseEstimatorOptions().
 }
 
 void RegularGridFusionPipeline::Reset() {
   num_successive_failures_ = 0;
   last_raycast_pose_ = {};
   pose_history_.clear();
+  is_first_depth_frame_ = true;
   regular_grid_.Reset();
 }
 
@@ -159,10 +119,10 @@ PerspectiveCamera RegularGridFusionPipeline::ColorCamera() const {
                     Vector2f(camera_params_.color.resolution),
                     camera_params_.color.depth_range.left(),
                     camera_params_.color.depth_range.right());
-  const PoseFrame& pose = pose_history_.empty() ?
-    initial_pose_ : pose_history_.back();
-  camera.setCameraFromWorld(pose.color_camera_from_world);
-
+  EuclideanTransform pose = pose_history_.empty() ?
+    EuclideanTransform() :
+    pose_history_.back().color_camera_from_world;
+  camera.setCameraFromWorld(pose);
   return camera;
 }
 
@@ -172,31 +132,41 @@ PerspectiveCamera RegularGridFusionPipeline::DepthCamera() const {
                     Vector2f(camera_params_.depth.resolution),
                     camera_params_.depth.depth_range.left(),
                     camera_params_.depth.depth_range.right());
-  const PoseFrame& pose = pose_history_.empty() ?
-    initial_pose_ : pose_history_.back();
-  camera.setCameraFromWorld(pose.depth_camera_from_world);
-
+  EuclideanTransform pose = pose_history_.empty() ?
+    EuclideanTransform() :
+    pose_history_.back().depth_camera_from_world;
+  camera.setCameraFromWorld(pose);
   return camera;
 }
 
 void RegularGridFusionPipeline::NotifyColorUpdated() {
   PipelineDataType data_changed = PipelineDataType::INPUT_COLOR;
 
-  if (pose_estimation_method_ == PoseFrame::EstimationMethod::PRECOMPUTED) {
-    auto color_itr = FindPoseFrame(precomputed_pose_history_,
+  bool pose_updated = false;
+
+  if (pose_estimator_options_.method == PoseEstimationMethod::PRECOMPUTED ||
+    pose_estimator_options_.method ==
+    PoseEstimationMethod::PRECOMPUTED_REFINE_WITH_DEPTH_ICP) {
+    auto color_itr = FindPoseFrame(pose_estimator_options_.precomputed_path,
       input_buffer_.color_timestamp_ns);
-    if (color_itr != std::end(precomputed_pose_history_)) {
+    if (color_itr != pose_estimator_options_.precomputed_path.end()) {
       data_changed |= PipelineDataType::CAMERA_POSE;
       pose_history_.push_back(*color_itr);
+      pose_updated = true;
     }
   } else if (
-    pose_estimation_method_ == PoseFrame::EstimationMethod::COLOR_ARUCO ||
-    pose_estimation_method_ ==
-      PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP) {
-    bool pose_updated = UpdatePoseWithColorCamera();
-    if (pose_updated) {
+    pose_estimator_options_.method == PoseEstimationMethod::COLOR_ARUCO ||
+    pose_estimator_options_.method ==
+      PoseEstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP) {
+    if (UpdatePoseWithColorCamera()) {
       data_changed |= PipelineDataType::CAMERA_POSE;
+      pose_updated = true;
     }
+    data_changed |= PipelineDataType::POSE_ESTIMATION_VIS;
+  }
+
+  if (pose_updated) {
+    Raycast();
   }
 
   if (data_changed != PipelineDataType::NONE) {
@@ -214,29 +184,38 @@ void RegularGridFusionPipeline::NotifyDepthUpdated() {
                                     incoming_camera_normals_);
   data_changed |= PipelineDataType::SMOOTHED_DEPTH;
 
-  // TODO: PRECOMPUTED_COLOR_INTERPOLATE_DEPTH
-  // TODO: PRECOMPUTED_COLOR_ICP_DEPTH
-  // TODO: PRECOMPUTED
-
   bool pose_updated = false;
+  PoseEstimationMethod method = pose_estimator_options_.method;
 
-#if 0
-  if (pose_estimation_method_ == PoseFrame::EstimationMethod::PRECOMPUTED) {
-    // Find lower and upper bound. Slerp().
-  } else if (pose_estimation_method_ ==
-    PoseFrame::EstimationMethod::DEPTH_ICP) {
-    if (UpdatePoseWithDepthCamera()) {
-      data_changed |= PipelineDataType::POSE_ESTIMATION_VIS;
+  // TODO: PRECOMPUTED_REFINE_WITH_DEPTH_ICP
+  if (method == PoseEstimationMethod::PRECOMPUTED) {
+    auto itr = FindPoseFrame(pose_estimator_options_.precomputed_path,
+      input_buffer_.depth_timestamp_ns);
+    if (itr != pose_estimator_options_.precomputed_path.end()) {
+      data_changed |= PipelineDataType::CAMERA_POSE;
+      pose_history_.push_back(*itr);
+      pose_updated = true;
     }
-  } else if (pose_estimation_method_ ==
-    PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP) {
+  } else if (method == PoseEstimationMethod::DEPTH_ICP) {
+    // In DEPTH_ICP mode, if it's the very first depth frame, use the provided
+    // initial pose.
+    if (is_first_depth_frame_) {
+      is_first_depth_frame_ = false;
+      pose_updated = true;
+    } else if (UpdatePoseWithDepthCamera()) {
+      data_changed |= PipelineDataType::POSE_ESTIMATION_VIS;
+      pose_updated = true;
+    }
+  } else if (method == PoseEstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP) {
+    // In COLOR+DEPTH_ICP mode, if we get depth frames without an absolute pose
+    // estimate from color tracking, UpdatePoseWithDepthCamera() will fail
+    // since nothing will have been raycast. This has the effect of waiting for
+    // a color frame to lock on.
     if (UpdatePoseWithDepthCamera()) {
       data_changed |= PipelineDataType::POSE_ESTIMATION_VIS;
+      pose_updated = true;
     }
   }
-#else
-  pose_updated = UpdatePoseWithDepthCamera();
-#endif
 
   if (pose_updated && kDoFusion) {
     Fuse();
@@ -249,126 +228,6 @@ void RegularGridFusionPipeline::NotifyDepthUpdated() {
     emit dataChanged(data_changed);
   }
 }
-
-#if 0
-// TODO: Yuck this should really take in just one event.
-void RegularGridFusionPipeline::NotifyInputUpdated(bool color_updated,
-                                                   bool depth_updated) {
-  assert (color_updated || depth_updated);
-
-  PipelineDataType data_changed = PipelineDataType::NONE;
-
-  bool color_pose_updated = false;
-  bool depth_pose_updated = false;
-
-  if (color_updated) {
-    data_changed |= PipelineDataType::INPUT_COLOR;
-  }
-  if (depth_updated) {
-    copy(input_buffer_.depth_meters.readView(), depth_meters_);
-    depth_processor_.Smooth(depth_meters_, smoothed_depth_meters_);
-    depth_processor_.EstimateNormals(smoothed_depth_meters_,
-                                     incoming_camera_normals_);
-    data_changed |= PipelineDataType::INPUT_DEPTH;
-    data_changed |= PipelineDataType::SMOOTHED_DEPTH;
-  }
-
-  // TODO: yuck, refactor this.
-  if (precomputed_pose_history_.size() > 0) {
-    if (color_updated && depth_updated) {
-      if (input_buffer_.color_timestamp_ns <
-          input_buffer_.depth_timestamp_ns) {
-        auto color_itr = FindPoseFrame(precomputed_pose_history_,
-          input_buffer_.color_timestamp_ns);
-        if (color_itr != std::end(precomputed_pose_history_)) {
-          color_pose_updated = true;
-          pose_history_.push_back(*color_itr);
-        }
-
-        auto depth_itr = FindPoseFrame(precomputed_pose_history_,
-          input_buffer_.depth_timestamp_ns);
-        if (depth_itr != std::end(precomputed_pose_history_)) {
-          depth_pose_updated = true;
-          pose_history_.push_back(*depth_itr);
-        }
-      } else {
-        auto depth_itr = FindPoseFrame(precomputed_pose_history_,
-          input_buffer_.depth_timestamp_ns);
-        if (depth_itr != std::end(precomputed_pose_history_)) {
-          depth_pose_updated = true;
-          pose_history_.push_back(*depth_itr);
-        }
-
-        auto color_itr = FindPoseFrame(precomputed_pose_history_,
-          input_buffer_.color_timestamp_ns);
-        if (color_itr != std::end(precomputed_pose_history_)) {
-          color_pose_updated = true;
-          pose_history_.push_back(*color_itr);
-        }
-      }
-    } else if (color_updated) {
-      auto color_itr = FindPoseFrame(precomputed_pose_history_,
-          input_buffer_.color_timestamp_ns);
-      if (color_itr != std::end(precomputed_pose_history_)) {
-        color_pose_updated = true;
-        pose_history_.push_back(*color_itr);
-      }
-    } else if (depth_updated) {
-      auto depth_itr = FindPoseFrameByFrameIndex(precomputed_pose_history_,
-          input_buffer_.depth_frame_index);
-      if (depth_itr != std::end(precomputed_pose_history_)) {
-        depth_pose_updated = true;
-        pose_history_.push_back(*depth_itr);
-      }
-    }
-  } else {
-    if (pose_estimation_method_ ==
-      PoseFrame::EstimationMethod::COLOR_ARUCO) {
-      if (color_updated) {
-        color_pose_updated = UpdatePoseWithColorCamera();
-      }
-    } else if (pose_estimation_method_ ==
-      PoseFrame::EstimationMethod::DEPTH_ICP) {
-      if (depth_updated) {
-        depth_pose_updated = UpdatePoseWithDepthCamera();
-      }
-    } else if (pose_estimation_method_ ==
-      PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP) {
-      // If both color and depth are updated, run them in order.
-      if (color_updated && depth_updated) {
-        if (input_buffer_.color_timestamp_ns <
-          input_buffer_.depth_timestamp_ns) {
-          color_pose_updated = UpdatePoseWithColorCamera();
-          depth_pose_updated = UpdatePoseWithDepthCamera();
-        } else {
-          depth_pose_updated = UpdatePoseWithDepthCamera();
-          color_pose_updated = UpdatePoseWithColorCamera();
-        }
-      } else if (color_updated) {
-        color_pose_updated = UpdatePoseWithColorCamera();
-      } else if (depth_updated) {
-        depth_pose_updated = UpdatePoseWithDepthCamera();
-      }
-    }
-  }
-
-  if (color_pose_updated || depth_pose_updated) {
-    data_changed |= PipelineDataType::CAMERA_POSE;
-    if (color_pose_updated) {
-      data_changed |= PipelineDataType::POSE_ESTIMATION_VIS;
-    }
-    if (depth_pose_updated && kDoFusion) {
-      Fuse();
-      Raycast();
-      data_changed |= PipelineDataType::TSDF;
-      data_changed |= PipelineDataType::RAYCAST_NORMALS;
-    }
-  }
-  if (data_changed != PipelineDataType::NONE) {
-    emit dataChanged(data_changed);
-  }
-}
-#endif
 
 InputBuffer& RegularGridFusionPipeline::GetInputBuffer() {
   return input_buffer_;
@@ -388,19 +247,21 @@ RegularGridFusionPipeline::TSDFWorldFromGridTransform() const {
   return regular_grid_.WorldFromGrid();
 }
 
-
+// TODO: make this a pure function and have it take as parameters the last
+// raycast pose, last raycast image, and incoming image.
+// The caller can push it onto history.
 bool RegularGridFusionPipeline::UpdatePoseWithColorCamera()
 {
-  assert (pose_estimation_method_ ==
-    PoseFrame::EstimationMethod::COLOR_ARUCO ||
-    pose_estimation_method_ ==
-    PoseFrame::EstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP);
+  assert (pose_estimator_options_.method ==
+    PoseEstimationMethod::COLOR_ARUCO ||
+    pose_estimator_options_.method ==
+    PoseEstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP);
   ArucoPoseEstimator::Result result =
     aruco_pose_estimator_.EstimatePose(input_buffer_.color_bgr_ydown,
       aruco_vis_);
+
   if (result.valid) {
     PoseFrame pose_frame;
-    pose_frame.method = PoseFrame::EstimationMethod::COLOR_ARUCO;
     pose_frame.frame_index = input_buffer_.color_frame_index;
     pose_frame.timestamp_ns = input_buffer_.color_timestamp_ns;
     pose_frame.color_camera_from_world = inverse(result.world_from_camera);
@@ -409,42 +270,23 @@ bool RegularGridFusionPipeline::UpdatePoseWithColorCamera()
         pose_frame.color_camera_from_world);
 
     pose_history_.push_back(pose_frame);
-
-    // Flip visualization upside down.
-    flipYInPlace(aruco_vis_.writeView());
   }
+
+  // Flip visualization upside down.
+  flipYInPlace(aruco_vis_.writeView());
 
   return result.valid;
 }
 
+// TODO: make this a pure function and have it take as parameters the last
+// raycast pose, last raycast image, and incoming image.
+// The caller can push it onto history. The caller would also be the one
+// that maintains the number of successive failures.
 bool RegularGridFusionPipeline::UpdatePoseWithDepthCamera() {
   // ICP can only estimate relative pose, not absolute. I.e., it needs both a
   // previous pose and a 3D model before it can estimate the current pose.
-  //
-  // In ICP-only mode, initialize with a user-provided default pose.
-  // In fiducial + ICP mode, do nothing until we estimated a pose from the
-  // fiducial.
-  if (pose_history_.empty()) {
-    if (pose_estimation_method_ == PoseFrame::EstimationMethod::DEPTH_ICP) {
-      pose_history_.push_back(initial_pose_);
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  // Initialization: in COLOR+DEPTH_ICP mode, we wait until we've found the
-  // fiducial marker in the color frame before fusing and raycasting. But when
-  // we process the first depth frame, we will not have a previous depth pose
-  // yet. In this case, return true: it will use the last color frame.
-  if (last_raycast_pose_.method == PoseFrame::EstimationMethod::NONE) {
-    return true;
-  }
-
-  // In COLOR+DEPTH_ICP mode, if there's been a more recent pose estimate than
-  // the last raycast, update the raycast.
-  if (last_raycast_pose_.timestamp_ns < pose_history_.back().timestamp_ns) {
-    Raycast();
+  if (last_raycast_pose_.timestamp_ns == 0) {
+    return false;
   }
 
   // TODO: Have icp_result write itself into a DeviceArray2D<T>.
@@ -457,7 +299,6 @@ bool RegularGridFusionPipeline::UpdatePoseWithDepthCamera() {
 
   if (icp_result.valid) {
     PoseFrame pose_frame;
-    pose_frame.method = PoseFrame::EstimationMethod::DEPTH_ICP;
     pose_frame.timestamp_ns = input_buffer_.depth_timestamp_ns;
     pose_frame.frame_index = input_buffer_.depth_frame_index;
     pose_frame.depth_camera_from_world = inverse(icp_result.world_from_camera);

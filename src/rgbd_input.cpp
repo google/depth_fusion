@@ -103,7 +103,7 @@ void RgbdInput::read(InputBuffer* buffer,
   if (input_type_ == InputType::OPENNI2) {
     // TODO: if closed, return false
 
-    bool succeeded = openni2_camera_->pollAll(openni2_frame_);
+    bool succeeded = openni2_camera_->pollOne(openni2_frame_);
     if (openni2_frame_.colorUpdated) {
       // Copy the buffer, flipping it upside down for OpenGL.
       copy<uint8x3>(openni2_frame_.color, flipY(buffer->color_rgb.writeView()));
@@ -122,7 +122,7 @@ void RgbdInput::read(InputBuffer* buffer,
       *depth_updated = openni2_frame_.depthUpdated;
     }
 
-  } else if(input_type_ == InputType::FILE) {
+  } else if (input_type_ == InputType::FILE) {
     uint32_t stream_id;
     int64_t timestamp_ns;
     int32_t frame_index;
@@ -131,15 +131,19 @@ void RgbdInput::read(InputBuffer* buffer,
 
     if (src.notNull()) {
       if (stream_id == color_stream_id_) {
+        Array2DReadView<uint8x3> src_rgb(
+          src.pointer(), color_metadata_.size);
+        // Copy the buffer, flipping it upside down for OpenGL.
+        copy<uint8x3>(src_rgb, flipY(buffer->color_rgb.writeView()));
+        // Convert RGB to BGR for OpenCV.
+        RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
         buffer->color_timestamp_ns = timestamp_ns;
         buffer->color_frame_index = frame_index;
 
-        Array2DReadView<uint8x3> src_rgb(
-          src.pointer(), color_metadata_.size);
-        RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
-        bool succeeded = copy(src_rgb, flipY(buffer->color_rgb.writeView()));
-
-        *rgb_updated = succeeded;
+        //RGBToBGR(src_rgb, buffer->color_bgr_ydown.writeView());
+        //bool succeeded = copy(src_rgb, flipY(buffer->color_rgb.writeView()));
+        *rgb_updated = true;
+        // *rgb_updated = succeeded;
       } else if (stream_id == raw_depth_stream_id_ ) {
         buffer->depth_timestamp_ns = timestamp_ns;
         buffer->depth_frame_index = frame_index;
