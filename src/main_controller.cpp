@@ -27,6 +27,14 @@
 DECLARE_string(mode);
 DECLARE_string(sm_input_type);
 
+// Outputs.
+DECLARE_string(sm_output_mesh);
+DECLARE_string(sm_output_pose);
+#if 0
+// TODO: implement output rgbd.
+DECLARE_string(sm_output_rgbd);
+#endif
+
 MainController::MainController(
   RgbdInput* input, RegularGridFusionPipeline* pipeline,
   ControlWidget* control_widget, MainWidget* main_widget) :
@@ -57,6 +65,8 @@ void MainController::OnReadInput() {
   if (FLAGS_mode == "single_moving") {
     bool color_updated;
     bool depth_updated;
+    // TODO: read should report a status:
+    // COLOR_UPDATED, DEPTH_UPDATED, TIMEOUT or END_OF_FILE.
     input_->read(&(pipeline_->GetInputBuffer()),
       &color_updated, &depth_updated);
     // TODO: read just color or depth, not both.
@@ -67,8 +77,8 @@ void MainController::OnReadInput() {
         pipeline_->NotifyDepthUpdated();
       }
     } else if (FLAGS_sm_input_type == "file") {
-      // TODO: report end of file correctly.
       read_input_timer_->stop();
+      OnEndOfStream();
     }
   } else if (FLAGS_mode == "multi_static") {
     for (int i = 0; i < static_cast<int>(inputs_.size()); ++i) {
@@ -148,5 +158,31 @@ void MainController::OnSavePoseClicked(QString filename) {
       QMessageBox::critical(main_widget_, "Save Pose Stream Status",
         "Failed to save to: " + filename);
     }
+  }
+}
+
+void MainController::OnEndOfStream() {
+#if 0
+  // TODO: implement output rgbd.
+  if (FLAGS_sm_output_rgbd != "") {
+    // TODO: separate timestamps for precomputed poses.
+
+    PerspectiveCamera camera = pipeline_->ColorCamera();
+
+    const auto& pose_history = pipeline_->PoseHistory();
+    for (const PoseFrame& p : pose_history) {
+      camera.setCameraFromWorld(p.color_camera_from_world);
+
+      //pipeline_->Raycast(camera, world_points, world_normals);
+
+      // point cloud format isn't so bad.
+    }
+  }
+#endif
+  if (FLAGS_sm_output_mesh != "") {
+    OnSaveMeshClicked(QString::fromStdString(FLAGS_sm_output_mesh));
+  }
+  if (FLAGS_sm_output_pose != "") {
+    OnSavePoseClicked(QString::fromStdString(FLAGS_sm_output_pose));
   }
 }

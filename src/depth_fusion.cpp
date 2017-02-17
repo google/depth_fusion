@@ -61,6 +61,18 @@ DEFINE_string(sm_pose_estimator, "color_aruco_and_depth_icp",
 DEFINE_string(sm_pose_file, "",
   "Filename for precomputed pose path.");
 
+// Outputs.
+DEFINE_string(sm_output_mesh, "",
+  "[Optional] If not-empty, save mesh (as a .obj).");
+DEFINE_string(sm_output_pose, "",
+  "[Optional] If not-empty, save pose path.");
+#if 0
+// TODO: implement output rgbd.
+DEFINE_string(sm_output_rgbd, "",
+  "[Optional] If not-empty, raycast the fused TSDF write a depth map for "
+  " frame to a this .rgbd file");
+#endif
+
 // Multi static mode flags.
 DEFINE_bool(ms_use_gui, true,
   "Set true to visualize with GUI, false to run in batch mode.");
