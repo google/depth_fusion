@@ -111,7 +111,7 @@ float2 TrilinearSample(KernelArray3D<const TSDF> regular_grid,
   }
 
   // Trilerp, ignoring weights.
-  // TODO(jiawen): weighted sdf?
+  // TODO(jiawen): what would a weighted average mean?
   float d_000 = v_000.Distance(max_tsdf_value);
   float d_100 = v_100.Distance(max_tsdf_value);
   float d_010 = v_010.Distance(max_tsdf_value);
@@ -124,8 +124,8 @@ float2 TrilinearSample(KernelArray3D<const TSDF> regular_grid,
   // Lerp in x.
   float d_l00 = lerp(d_000, d_100, t.x);
   float d_l10 = lerp(d_010, d_110, t.x);
-  float d_l01 = lerp(d_000, d_101, t.x);
-  float d_l11 = lerp(d_010, d_111, t.x);
+  float d_l01 = lerp(d_001, d_101, t.x);
+  float d_l11 = lerp(d_011, d_111, t.x);
 
   // Lerp in y.
   float d_ll0 = lerp(d_l00, d_l10, t.y);
@@ -148,7 +148,10 @@ float4 TrilinearSampleNormal(KernelArray3D<const TSDF> regular_grid,
   float3 dy3 = { 0, 1, 0 };
   float3 dz3 = { 0, 0, 1 };
 
-  // If any of the samples are invalid, they will be (0, 0).
+  // For each trilerp, if any of the 8 samples are invalid, it will return
+  // (0, 0).
+  // TODO(jiawen): can optimize this by realizing that a lot of samples are
+  // redundant between the trilinear samples.
   float2 d_000 = TrilinearSample(regular_grid, grid_coords, max_tsdf_value);
   float2 d_100 = TrilinearSample(regular_grid, grid_coords + dx3,
     max_tsdf_value);
@@ -165,9 +168,10 @@ float4 TrilinearSampleNormal(KernelArray3D<const TSDF> regular_grid,
     d_001.x - d_000.x,
   };
 
-  // If any of the samples are invalid, length will be 0.
+  // Return (0, 0, 0, 0) if any trilinear samples are invalid or the normal is
+  // invalid.
   float len = length(normal);
-  if (len > 0) {
+  if (len > 0 && d_000.y > 0 && d_100.y > 0 && d_010.y > 0 && d_001.y > 0) {
     normal_out = make_float4(normal / len, 1.0f);
   }
 
