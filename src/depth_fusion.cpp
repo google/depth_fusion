@@ -66,11 +66,12 @@ DEFINE_string(sm_output_mesh, "",
   "[Optional] If not-empty, save mesh (as a .obj).");
 DEFINE_string(sm_output_pose, "",
   "[Optional] If not-empty, save pose path.");
+DEFINE_string(sm_output_dir, "",
+  "[Optional] Raycast the TSDF and write a frame for each input pose.");
 #if 0
-// TODO: implement output rgbd.
 DEFINE_string(sm_output_rgbd, "",
   "[Optional] If not-empty, raycast the fused TSDF write a depth map for "
-  " frame to a this .rgbd file");
+  " each frame to a this .rgbd file");
 #endif
 
 // Multi static mode flags.

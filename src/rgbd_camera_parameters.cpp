@@ -15,37 +15,39 @@
 
 #include "libcgt/core/io/PortableFloatMapIO.h"
 #include "libcgt/core/vecmath/EuclideanTransform.h"
+#include "libcgt/opencv_interop/Calib3d.h"
 #include "libcgt/opencv_interop/VecmathUtils.h"
 #include <third_party/pystring/pystring.h>
 
 using namespace pystring;
 using namespace libcgt::core::vecmath;
 
+using libcgt::opencv_interop::cameraMatrixToIntrinsics;
+
 CameraParameters LoadCameraIntrinsics(const cv::FileStorage& fs,
 	const std::string& namePrefix) {
 	CameraParameters params = {};
 
 	cv::Size image_size;
-	cv::Mat intrinsics_gl;
+	cv::Mat intrinsics_matrix_gl;
 	cv::Mat dist_coeffs;
+  cv::Mat undistorted_intrinsics_matrix_gl;
 
 	fs[namePrefix + "ImageSize"] >> image_size;
-	fs[namePrefix + "CameraMatrix_gl"] >> intrinsics_gl;
+	fs[namePrefix + "CameraMatrix_gl"] >> intrinsics_matrix_gl;
 	fs[namePrefix + "DistCoeffs"] >> dist_coeffs;
+  fs[namePrefix + "NewCameraMatrix_gl" ] >> undistorted_intrinsics_matrix_gl;
 
 	params.resolution = { image_size.width, image_size.height };
-	params.intrinsics.focalLength.x =
-		static_cast<float>(intrinsics_gl.at<double>(0, 0));
-	params.intrinsics.focalLength.y =
-		static_cast<float>(intrinsics_gl.at<double>(1, 1));
-	params.intrinsics.principalPoint.x =
-		static_cast<float>(intrinsics_gl.at<double>(0, 2));
-	params.intrinsics.principalPoint.y =
-		static_cast<float>(intrinsics_gl.at<double>(1, 2));
+
+  params.intrinsics = cameraMatrixToIntrinsics(intrinsics_matrix_gl);
 	for (int i = 0; i < 5; ++i) {
 		params.dist_coeffs.push_back(
 			static_cast<float>(dist_coeffs.at<double>(0, i)));
 	}
+
+  params.undistorted_intrinsics = cameraMatrixToIntrinsics(
+    undistorted_intrinsics_matrix_gl);
 
 	return params;
 }

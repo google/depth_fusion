@@ -31,6 +31,8 @@ struct CameraParameters {
   std::vector<float> dist_coeffs;
   Array2D<Vector2f> undistortion_map; // y axis points up.
 
+  Intrinsics undistorted_intrinsics;
+
   // TODO: move this into depth parameters only
   Range1f depth_range; // In meters.
 };

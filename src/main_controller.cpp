@@ -17,6 +17,8 @@
 #include <QMessageBox>
 #include <QTimer>
 
+#include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/core/io/PortableFloatMapIO.h"
 #include "libcgt/camera_wrappers/PoseStream.h"
 
 #include "control_widget.h"
@@ -31,9 +33,16 @@ DECLARE_string(sm_input_type);
 DECLARE_string(sm_output_mesh);
 DECLARE_string(sm_output_pose);
 #if 0
-// TODO: implement output rgbd.
 DECLARE_string(sm_output_rgbd);
 #endif
+DECLARE_string(sm_output_dir);
+
+using libcgt::core::arrayutils::cast;
+using libcgt::core::arrayutils::flipY;
+
+namespace {
+  constexpr int kTimestampFieldWidth = 20;
+}
 
 MainController::MainController(
   RgbdInput* input, RegularGridFusionPipeline* pipeline,
@@ -62,6 +71,7 @@ MainController::MainController(
 }
 
 void MainController::OnReadInput() {
+  static int i = 0;
   if (FLAGS_mode == "single_moving") {
     bool color_updated;
     bool depth_updated;
@@ -162,23 +172,52 @@ void MainController::OnSavePoseClicked(QString filename) {
 }
 
 void MainController::OnEndOfStream() {
-#if 0
-  // TODO: implement output rgbd.
-  if (FLAGS_sm_output_rgbd != "") {
+  // Read pose frames from file.
+  std::string pose_filename = "d:/tmp/slf/still_life_00002/sfm_aligned_to_aruco.pose";
+  const auto& rgbdParams = pipeline_->GetCameraParameters();
+  const auto& colorParams = rgbdParams.color;
+  std::vector<PoseFrame> raycast_poses = LoadPoseHistory(pose_filename,
+    rgbdParams.depth_from_color);
+
+  // Read intrinsics from file?
+
+  // TODO: save volume.
+
+  if (FLAGS_sm_output_dir != "") {
     // TODO: separate timestamps for precomputed poses.
 
-    PerspectiveCamera camera = pipeline_->ColorCamera();
+    PerspectiveCamera camera;
+    camera.setFrustum(colorParams.undistorted_intrinsics,
+      Vector2f(colorParams.resolution));
 
-    const auto& pose_history = pipeline_->PoseHistory();
-    for (const PoseFrame& p : pose_history) {
+    Array2D<Vector4f> world_points(colorParams.resolution);
+    Array2D<Vector4f> world_normals(colorParams.resolution);
+    DeviceArray2D<float4> device_world_points(colorParams.resolution);
+    DeviceArray2D<float4> device_world_normals(colorParams.resolution);
+
+    for (const PoseFrame& p : raycast_poses) {
+      char world_points_filename[255];
+      char world_normals_filename[255];
+      sprintf(world_points_filename,"%s/world_points_%05d_%020lld.pfm4",
+        FLAGS_sm_output_dir.c_str(),
+        p.frame_index, p.timestamp_ns);
+      sprintf(world_normals_filename, "%s/world_normals_%05d_%020lld.pfm4",
+        FLAGS_sm_output_dir.c_str(),
+        p.frame_index, p.timestamp_ns);
+
       camera.setCameraFromWorld(p.color_camera_from_world);
+      pipeline_->Raycast(camera, device_world_points, device_world_normals);
 
-      //pipeline_->Raycast(camera, world_points, world_normals);
+      copy(device_world_points, cast<float4>(world_points.writeView()));
+      copy(device_world_normals, cast<float4>(world_normals.writeView()));
 
-      // point cloud format isn't so bad.
+      PortableFloatMapIO::write(flipY(world_points.readView()),
+        world_points_filename);
+      PortableFloatMapIO::write(flipY(world_normals.readView()),
+        world_normals_filename);
     }
   }
-#endif
+
   if (FLAGS_sm_output_mesh != "") {
     OnSaveMeshClicked(QString::fromStdString(FLAGS_sm_output_mesh));
   }
