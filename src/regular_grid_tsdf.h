@@ -93,9 +93,11 @@ public:
 
   TriangleMesh Triangulate() const;
 
+  bool Load(const std::string& filename);
+  bool Save(const std::string& filename) const;
+
 private:
 
-  Box3f bounding_box_; // (0, 0, 0) --> Resolution().
   SimilarityTransform grid_from_world_;
   SimilarityTransform world_from_grid_;
 

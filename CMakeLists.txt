@@ -216,6 +216,75 @@ target_link_libraries( visualize_camera_path_cli
     cgt_qt_interop	
 )
 
+# fuse_depth_cli executable
+set( FUSE_DEPTH_CLI_HEADERS
+    src/aruco/aruco_pose_estimator.h
+    src/aruco/cube_fiducial.h
+	src/aruco/single_marker_fiducial.h
+    src/calibrated_posed_depth_camera.h
+    src/depth_processor.h
+    src/fuse.h
+    src/icp_least_squares_data.h
+    src/input_buffer.h
+    src/marching_cubes.h
+    src/pipeline_data_type.h
+	src/pose_estimation_method.h
+    src/pose_frame.h
+    src/pose_utils.h
+    src/projective_point_plane_icp.h
+    src/raycast.h
+    src/regular_grid_fusion_pipeline.h
+    src/regular_grid_tsdf.h
+    src/rgbd_camera_parameters.h
+    src/rgbd_input.h
+    src/tsdf.h
+)
+
+set( FUSE_DEPTH_CLI_SOURCES_CPP
+	src/fuse_depth/fuse_depth_cli.cpp
+    src/aruco/aruco_pose_estimator.cpp
+    src/aruco/cube_fiducial.cpp
+	src/aruco/single_marker_fiducial.cpp
+    src/icp_least_squares_data.cpp
+    src/input_buffer.cpp
+    src/marching_cubes.cpp
+    src/pose_utils.cpp
+    src/regular_grid_fusion_pipeline.cpp
+    src/rgbd_camera_parameters.cpp
+    src/rgbd_input.cpp
+)
+
+set( FUSE_DEPTH_CLI_SOURCES_CU
+    src/depth_processor.cu
+    src/fuse.cu
+    src/projective_point_plane_icp.cu
+    src/raycast.cu
+    src/regular_grid_tsdf.cu
+)
+
+cuda_add_executable( fuse_depth_cli
+    ${FUSE_DEPTH_CLI_HEADERS}
+    ${FUSE_DEPTH_CLI_SOURCES_CPP}
+    ${FUSE_DEPTH_CLI_SOURCES_CU}
+)
+set_property( TARGET fuse_depth_cli PROPERTY CXX_STANDARD 11 )
+target_compile_definitions( fuse_depth_cli
+    PRIVATE _USE_MATH_DEFINES )
+target_include_directories( fuse_depth_cli PRIVATE . )
+target_link_libraries( fuse_depth_cli
+    gflags
+    opengl32 GLEW::GLEW
+    ${CUDA_LIBRARIES}
+    Qt5::Core Qt5::OpenGL Qt5::Widgets
+    ${OpenCV_LIBS}
+	cgt_core
+    cgt_cuda
+    cgt_gl
+    cgt_camera_wrappers
+    cgt_opencv_interop
+    cgt_qt_interop	
+)
+
 # TODO: make this build on Linux. It might need -l GL.
 #target_link_libraries( depth_fusion GL GLEW::GLEW Qt5::Core Qt5::OpenGL
 #    Qt5::Widgets ${OpenCV_LIBS} cgt_core cgt_gl cgt_opencv_interop libpxc )

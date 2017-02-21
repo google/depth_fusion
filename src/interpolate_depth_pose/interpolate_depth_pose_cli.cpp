@@ -110,8 +110,14 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  RGBDCameraParameters params =
-    LoadRGBDCameraParameters(FLAGS_calibration_dir);
+  RGBDCameraParameters params;
+  bool ok = LoadRGBDCameraParameters(FLAGS_calibration_dir, &params);
+  if (!ok) {
+    fprintf(stderr, "Error loading RGBD camera parameters from %s.\n",
+      FLAGS_calibration_dir.c_str());
+    return 1;
+  }
+
   PoseStreamMetadata input_metadata;
   auto sfm_aligned_poses = LoadPoses(FLAGS_reference_pose, input_metadata);
   int num_sfm_poses = static_cast<int>(sfm_aligned_poses.size());

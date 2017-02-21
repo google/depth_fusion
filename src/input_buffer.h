@@ -14,8 +14,6 @@
 #ifndef INPUT_BUFFER_H
 #define INPUT_BUFFER_H
 
-#include <mutex>
-
 #include "libcgt/core/common/Array2D.h"
 #include "libcgt/core/common/BasicTypes.h"
 #include "libcgt/core/vecmath/EuclideanTransform.h"

@@ -60,9 +60,6 @@ class MainController : public QObject {
   MainWidget* main_widget_ = nullptr;
 
   QTimer* read_input_timer_ = nullptr;
-
-  // If RgbdInput is in FILE mode, at the end of stream, call this function.
-  void OnEndOfStream();
 };
 
 #endif  // MAIN_CONTROLLER_H

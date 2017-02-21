@@ -15,37 +15,39 @@
 
 #include "libcgt/core/io/PortableFloatMapIO.h"
 #include "libcgt/core/vecmath/EuclideanTransform.h"
+#include "libcgt/opencv_interop/Calib3d.h"
 #include "libcgt/opencv_interop/VecmathUtils.h"
 #include <third_party/pystring/pystring.h>
 
 using namespace pystring;
 using namespace libcgt::core::vecmath;
 
+using libcgt::opencv_interop::cameraMatrixToIntrinsics;
+
 CameraParameters LoadCameraIntrinsics(const cv::FileStorage& fs,
 	const std::string& namePrefix) {
 	CameraParameters params = {};
 
 	cv::Size image_size;
-	cv::Mat intrinsics_gl;
+	cv::Mat intrinsics_matrix_gl;
 	cv::Mat dist_coeffs;
+  cv::Mat undistorted_intrinsics_matrix_gl;
 
 	fs[namePrefix + "ImageSize"] >> image_size;
-	fs[namePrefix + "CameraMatrix_gl"] >> intrinsics_gl;
+	fs[namePrefix + "CameraMatrix_gl"] >> intrinsics_matrix_gl;
 	fs[namePrefix + "DistCoeffs"] >> dist_coeffs;
+  fs[namePrefix + "NewCameraMatrix_gl" ] >> undistorted_intrinsics_matrix_gl;
 
 	params.resolution = { image_size.width, image_size.height };
-	params.intrinsics.focalLength.x =
-		static_cast<float>(intrinsics_gl.at<double>(0, 0));
-	params.intrinsics.focalLength.y =
-		static_cast<float>(intrinsics_gl.at<double>(1, 1));
-	params.intrinsics.principalPoint.x =
-		static_cast<float>(intrinsics_gl.at<double>(0, 2));
-	params.intrinsics.principalPoint.y =
-		static_cast<float>(intrinsics_gl.at<double>(1, 2));
+
+  params.intrinsics = cameraMatrixToIntrinsics(intrinsics_matrix_gl);
 	for (int i = 0; i < 5; ++i) {
 		params.dist_coeffs.push_back(
 			static_cast<float>(dist_coeffs.at<double>(0, i)));
 	}
+
+  params.undistorted_intrinsics = cameraMatrixToIntrinsics(
+    undistorted_intrinsics_matrix_gl);
 
 	return params;
 }
@@ -65,29 +67,41 @@ EuclideanTransform LoadEuclideanTransform(const cv::FileStorage& fs,
 	};
 }
 
-RGBDCameraParameters LoadRGBDCameraParameters(const std::string& dir) {
-	RGBDCameraParameters params;
+bool LoadRGBDCameraParameters(const std::string& dir,
+  RGBDCameraParameters* params) {
 	cv::FileStorage fs(
 		os::path::join(dir, "stereo_calibration.yaml"),
 		cv::FileStorage::READ);
 
-	params.color = LoadCameraIntrinsics(fs, "color");
-	params.color.undistortion_map =
-		PortableFloatMapIO::read(
-			os::path::join(dir, "color_undistort_map_gl.pfm2")).rg;
-	params.depth = LoadCameraIntrinsics(fs, "depth");
-	params.depth.undistortion_map =
-		PortableFloatMapIO::read(
-			os::path::join(dir, "depth_undistort_map_gl.pfm2")).rg;
+  if (!fs.isOpened()) {
+    return false;
+  }
 
-	params.color_from_depth = LoadEuclideanTransform(fs, "colorFromDepth_gl");
-	params.depth_from_color = LoadEuclideanTransform(fs, "depthFromColor_gl");
+	params->color = LoadCameraIntrinsics(fs, "color");
+  auto res = PortableFloatMapIO::read(
+    os::path::join(dir, "color_undistort_map_gl.pfm2"));
+  if (!res.valid) {
+    return false;
+  }
+	params->color.undistortion_map = res.rg;
 
-	// TODO: depth calibration should output a range.
-	params.depth.depth_range = Range1f::fromMinMax(0.8f, 4.0f);
-	params.color.depth_range = params.depth.depth_range;
+	params->depth = LoadCameraIntrinsics(fs, "depth");
+  res = PortableFloatMapIO::read(
+			os::path::join(dir, "depth_undistort_map_gl.pfm2"));
+  if (!res.valid) {
+    return false;
+  }
+	params->depth.undistortion_map = res.rg;
 
-	return params;
+	params->color_from_depth = LoadEuclideanTransform(fs, "colorFromDepth_gl");
+	params->depth_from_color = LoadEuclideanTransform(fs, "depthFromColor_gl");
+
+	// TODO: depth calibration should output a range instead of the hard coded
+  // constants here.
+	params->depth.depth_range = Range1f::fromMinMax(0.8f, 4.0f);
+	params->color.depth_range = params->depth.depth_range;
+
+  return true;
 }
 
 EuclideanTransform RGBDCameraParameters::ConvertToColorCameraFromWorld(

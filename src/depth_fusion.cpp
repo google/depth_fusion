@@ -57,21 +57,10 @@ DEFINE_string(sm_pose_estimator, "color_aruco_and_depth_icp",
   "Pose estimator. Valid options: \"color_aruco\", \"depth_icp\", "
   "\"color_aruco_and_depth_icp\", \"precomputed\" or "
   "\"precomputed_refine_with_depth_icp\"."
-  "If \"precomputed\", sm_pose_file is required.");
+  "If \"precomputed\" or \"precomputed_refine_with_depth_icp\", "
+  "input_pose is required.");
 DEFINE_string(sm_pose_file, "",
   "Filename for precomputed pose path.");
-
-// Outputs.
-DEFINE_string(sm_output_mesh, "",
-  "[Optional] If not-empty, save mesh (as a .obj).");
-DEFINE_string(sm_output_pose, "",
-  "[Optional] If not-empty, save pose path.");
-#if 0
-// TODO: implement output rgbd.
-DEFINE_string(sm_output_rgbd, "",
-  "[Optional] If not-empty, raycast the fused TSDF write a depth map for "
-  " frame to a this .rgbd file");
-#endif
 
 // Multi static mode flags.
 DEFINE_bool(ms_use_gui, true,
@@ -103,8 +92,13 @@ int SingleMovingCameraMain(int argc, char* argv[]) {
 
   QApplication app(argc, argv);
 
-  RGBDCameraParameters camera_params =
-    LoadRGBDCameraParameters(FLAGS_sm_calibration_dir);
+  RGBDCameraParameters camera_params;
+  bool ok = LoadRGBDCameraParameters(FLAGS_sm_calibration_dir, &camera_params);
+  if (!ok) {
+    fprintf(stderr, "Error loading RGBD camera parameters from %s.\n",
+      FLAGS_sm_calibration_dir);
+    return 1;
+  }
 
   const Vector3i kRegularGridResolution(512); // ~2m^3
   const float kRegularGridSideLength = 2.0f;

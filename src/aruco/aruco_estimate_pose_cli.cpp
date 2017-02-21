@@ -49,8 +49,13 @@ int main(int argc, char* argv[]) {
   }
 
   // TODO: tweak this so that it can fail.
-  RGBDCameraParameters camera_params =
-    LoadRGBDCameraParameters(FLAGS_calibration_dir);
+  RGBDCameraParameters camera_params;
+  bool ok = LoadRGBDCameraParameters(FLAGS_calibration_dir, &camera_params);
+  if (!ok) {
+    fprintf(stderr, "Error loading RGBD camera parameters from %s.\n",
+      FLAGS_calibration_dir.c_str());
+    return 1;
+  }
 
   bool rgb_updated;
   bool depth_updated;

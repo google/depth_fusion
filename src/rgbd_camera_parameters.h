@@ -31,6 +31,8 @@ struct CameraParameters {
   std::vector<float> dist_coeffs;
   Array2D<Vector2f> undistortion_map; // y axis points up.
 
+  Intrinsics undistorted_intrinsics;
+
   // TODO: move this into depth parameters only
   Range1f depth_range; // In meters.
 };
@@ -73,6 +75,10 @@ CameraParameters LoadCameraIntrinsics(const cv::FileStorage& fs,
 // Calls LoadCameraIntrinsics() on the YAML file with "color" and 'depth" as
 // prefixes for the intrinsics. Also reads "colorFromDepth_gl" and
 // "depthFromColor_gl" for extrinsics.
-RGBDCameraParameters LoadRGBDCameraParameters(const std::string& dir);
+//
+// On success, populates params and returns true.
+// Otherwise, returns false.
+bool LoadRGBDCameraParameters(const std::string& dir,
+  RGBDCameraParameters* params);
 
 #endif  // RGBD_CAMERA_PARAMETERS_H

@@ -17,6 +17,8 @@
 #include <QMessageBox>
 #include <QTimer>
 
+#include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/core/io/PortableFloatMapIO.h"
 #include "libcgt/camera_wrappers/PoseStream.h"
 
 #include "control_widget.h"
@@ -27,13 +29,9 @@
 DECLARE_string(mode);
 DECLARE_string(sm_input_type);
 
-// Outputs.
-DECLARE_string(sm_output_mesh);
-DECLARE_string(sm_output_pose);
-#if 0
-// TODO: implement output rgbd.
-DECLARE_string(sm_output_rgbd);
-#endif
+namespace {
+  constexpr int kTimestampFieldWidth = 20;
+}
 
 MainController::MainController(
   RgbdInput* input, RegularGridFusionPipeline* pipeline,
@@ -62,6 +60,7 @@ MainController::MainController(
 }
 
 void MainController::OnReadInput() {
+  static int i = 0;
   if (FLAGS_mode == "single_moving") {
     bool color_updated;
     bool depth_updated;
@@ -78,7 +77,6 @@ void MainController::OnReadInput() {
       }
     } else if (FLAGS_sm_input_type == "file") {
       read_input_timer_->stop();
-      OnEndOfStream();
     }
   } else if (FLAGS_mode == "multi_static") {
     for (int i = 0; i < static_cast<int>(inputs_.size()); ++i) {
@@ -129,7 +127,7 @@ void MainController::OnResetClicked() {
 void MainController::OnSaveMeshClicked(QString filename) {
   if (FLAGS_mode == "single_moving") {
     TriangleMesh mesh = pipeline_->Triangulate();
-    bool succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+    bool succeeded = mesh.saveOBJ(filename.toStdString());
     if (!succeeded) {
       QMessageBox::critical(main_widget_, "Save Mesh Status",
         "Failed to save to: " + filename);
@@ -138,7 +136,7 @@ void MainController::OnSaveMeshClicked(QString filename) {
     // HACK: rot180
     Matrix4f rot180 = Matrix4f::rotateX(static_cast<float>(M_PI));
     TriangleMesh mesh = msc_pipeline_->Triangulate(rot180);
-    bool succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+    bool succeeded = mesh.saveOBJ(filename.toStdString());
     if (!succeeded) {
       QMessageBox::critical(main_widget_, "Save Mesh Status",
         "Failed to save to: " + filename);
@@ -158,31 +156,5 @@ void MainController::OnSavePoseClicked(QString filename) {
       QMessageBox::critical(main_widget_, "Save Pose Stream Status",
         "Failed to save to: " + filename);
     }
-  }
-}
-
-void MainController::OnEndOfStream() {
-#if 0
-  // TODO: implement output rgbd.
-  if (FLAGS_sm_output_rgbd != "") {
-    // TODO: separate timestamps for precomputed poses.
-
-    PerspectiveCamera camera = pipeline_->ColorCamera();
-
-    const auto& pose_history = pipeline_->PoseHistory();
-    for (const PoseFrame& p : pose_history) {
-      camera.setCameraFromWorld(p.color_camera_from_world);
-
-      //pipeline_->Raycast(camera, world_points, world_normals);
-
-      // point cloud format isn't so bad.
-    }
-  }
-#endif
-  if (FLAGS_sm_output_mesh != "") {
-    OnSaveMeshClicked(QString::fromStdString(FLAGS_sm_output_mesh));
-  }
-  if (FLAGS_sm_output_pose != "") {
-    OnSavePoseClicked(QString::fromStdString(FLAGS_sm_output_pose));
   }
 }
