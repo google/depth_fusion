@@ -274,9 +274,12 @@ void RaycastKernel(KernelArray3D<const TSDF> regular_grid,
     float4 grid_normal = TrilinearSampleNormal(regular_grid,
       surface_point_grid, max_tsdf_value);
     if (grid_normal.w > 0) {
-      // TODO(jiawen): the gradient is weird and only needs the rotation part
-      // of the world_from_grid transformation. It's because we store world
-      // distances in the grid.
+      // TODO(jiawen): We store *world* distances in the grid (the fact that
+      // it's fixed-point is beside the point). Therefore, when we take its
+      // gradient, the normal is in world units. But world_from_grid is a
+      // similarity transformation yielding world units from grid units.
+      // Therefore, in this case, we hack it by normalizing again, but really,
+      // all you need is the rotational part.
       world_normal = make_float4(
         normalize(transformVector(world_from_grid, make_float3(grid_normal))),
         1.0f);
@@ -392,9 +395,12 @@ void AdaptiveRaycastKernel(KernelArray3D<const TSDF> regular_grid,
     float4 grid_normal = TrilinearSampleNormal(regular_grid,
       surface_point_grid, max_tsdf_value);
     if (grid_normal.w > 0) {
-      // TODO(jiawen): the gradient is weird and only needs the rotation part
-      // of the world_from_grid transformation. It's because we store world
-      // distances in the grid.
+      // TODO(jiawen): We store *world* distances in the grid (the fact that
+      // it's fixed-point is beside the point). Therefore, when we take its
+      // gradient, the normal is in world units. But world_from_grid is a
+      // similarity transformation yielding world units from grid units.
+      // Therefore, in this case, we hack it by normalizing again, but really,
+      // all you need is the rotational part.
       world_normal = make_float4(
         normalize(transformVector(world_from_grid, make_float3(grid_normal))),
         1.0f);

@@ -67,29 +67,41 @@ EuclideanTransform LoadEuclideanTransform(const cv::FileStorage& fs,
 	};
 }
 
-RGBDCameraParameters LoadRGBDCameraParameters(const std::string& dir) {
-	RGBDCameraParameters params;
+bool LoadRGBDCameraParameters(const std::string& dir,
+  RGBDCameraParameters* params) {
 	cv::FileStorage fs(
 		os::path::join(dir, "stereo_calibration.yaml"),
 		cv::FileStorage::READ);
 
-	params.color = LoadCameraIntrinsics(fs, "color");
-	params.color.undistortion_map =
-		PortableFloatMapIO::read(
-			os::path::join(dir, "color_undistort_map_gl.pfm2")).rg;
-	params.depth = LoadCameraIntrinsics(fs, "depth");
-	params.depth.undistortion_map =
-		PortableFloatMapIO::read(
-			os::path::join(dir, "depth_undistort_map_gl.pfm2")).rg;
+  if (!fs.isOpened()) {
+    return false;
+  }
 
-	params.color_from_depth = LoadEuclideanTransform(fs, "colorFromDepth_gl");
-	params.depth_from_color = LoadEuclideanTransform(fs, "depthFromColor_gl");
+	params->color = LoadCameraIntrinsics(fs, "color");
+  auto res = PortableFloatMapIO::read(
+    os::path::join(dir, "color_undistort_map_gl.pfm2"));
+  if (!res.valid) {
+    return false;
+  }
+	params->color.undistortion_map = res.rg;
 
-	// TODO: depth calibration should output a range.
-	params.depth.depth_range = Range1f::fromMinMax(0.8f, 4.0f);
-	params.color.depth_range = params.depth.depth_range;
+	params->depth = LoadCameraIntrinsics(fs, "depth");
+  res = PortableFloatMapIO::read(
+			os::path::join(dir, "depth_undistort_map_gl.pfm2"));
+  if (!res.valid) {
+    return false;
+  }
+	params->depth.undistortion_map = res.rg;
 
-	return params;
+	params->color_from_depth = LoadEuclideanTransform(fs, "colorFromDepth_gl");
+	params->depth_from_color = LoadEuclideanTransform(fs, "depthFromColor_gl");
+
+	// TODO: depth calibration should output a range instead of the hard coded
+  // constants here.
+	params->depth.depth_range = Range1f::fromMinMax(0.8f, 4.0f);
+	params->color.depth_range = params->depth.depth_range;
+
+  return true;
 }
 
 EuclideanTransform RGBDCameraParameters::ConvertToColorCameraFromWorld(

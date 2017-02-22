@@ -39,6 +39,8 @@ struct PoseEstimatorOptions {
   PoseEstimationMethod method =
     PoseEstimationMethod::COLOR_ARUCO_AND_DEPTH_ICP;
 
+  // TODO: move fiducial here.
+
   // Required if method is DEPTH_ICP.
   PoseFrame initial_pose = PoseFrame{};
 
@@ -60,14 +62,19 @@ class RegularGridFusionPipeline : public QObject {
     const SimilarityTransform& world_from_grid,
     const PoseEstimatorOptions& pose_estimator_options);
 
+  // TODO: refactor this.
+  bool LoadTSDF3D(const std::string& filename);
+  bool SaveTSDF3D(const std::string& filename) const;
+
   void Reset();
 
   const RGBDCameraParameters& GetCameraParameters() const;
   const CubeFiducial& GetArucoCubeFiducial() const;
   const SingleMarkerFiducial& GetArucoSingleMarkerFiducial() const;
 
-  // Get a mutable reference to the input buffer. Clients should update the
-  // values in the input buffer then call NotifyInputUpdated();
+  // Get a mutable reference to the input buffer. Clients should update
+  // fields of the input buffer then call NotifyColorUpdated() or
+  // NotifyDepthUpdated() to trigger a computation.
   InputBuffer& GetInputBuffer();
 
   // Get a read-only view of the latest color pose estimator's visualization.

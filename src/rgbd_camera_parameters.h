@@ -75,6 +75,10 @@ CameraParameters LoadCameraIntrinsics(const cv::FileStorage& fs,
 // Calls LoadCameraIntrinsics() on the YAML file with "color" and 'depth" as
 // prefixes for the intrinsics. Also reads "colorFromDepth_gl" and
 // "depthFromColor_gl" for extrinsics.
-RGBDCameraParameters LoadRGBDCameraParameters(const std::string& dir);
+//
+// On success, populates params and returns true.
+// Otherwise, returns false.
+bool LoadRGBDCameraParameters(const std::string& dir,
+  RGBDCameraParameters* params);
 
 #endif  // RGBD_CAMERA_PARAMETERS_H

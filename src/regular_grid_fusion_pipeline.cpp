@@ -33,7 +33,6 @@ namespace {
 // TODO: also specify a board configuration.
 const char* kArucoDetectorParamsFilename = "../res/detector_params.yaml";
 constexpr int kSingleMarkerFiducialId = 3;
-constexpr bool kDoFusion = true;
 
 std::vector<PoseFrame>::const_iterator FindPoseFrameByFrameIndex(
   const std::vector<PoseFrame>& pose_history,
@@ -93,6 +92,14 @@ RegularGridFusionPipeline::RegularGridFusionPipeline(
     kArucoDetectorParamsFilename),
   aruco_vis_(camera_params.color.resolution) {
   // TODO: CheckPoseEstimatorOptions().
+}
+
+bool RegularGridFusionPipeline::LoadTSDF3D(const std::string& filename) {
+  return regular_grid_.Load(filename);
+}
+
+bool RegularGridFusionPipeline::SaveTSDF3D(const std::string& filename) const {
+  return regular_grid_.Save(filename);
 }
 
 void RegularGridFusionPipeline::Reset() {
@@ -258,7 +265,7 @@ void RegularGridFusionPipeline::NotifyDepthUpdated() {
     }
   }
 
-  if (pose_updated && kDoFusion) {
+  if (pose_updated) {
     Fuse();
     Raycast();
     data_changed |= PipelineDataType::TSDF;

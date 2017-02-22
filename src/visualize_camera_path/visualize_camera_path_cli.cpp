@@ -38,8 +38,15 @@ int main(int argc, char* argv[]) {
   MainWidget main_widget;
   main_widget.show();
 
-  RGBDCameraParameters rgbd_params = LoadRGBDCameraParameters(
-    "D:/tmp/slf/asus_calib_00000");
+  // TODO: make this a flag.
+  std::string FLAGS_calibration_dir = "D:/tmp/slf/asus_calib_00000";
+  RGBDCameraParameters camera_params;
+  bool ok = LoadRGBDCameraParameters(FLAGS_calibration_dir, &camera_params);
+  if (!ok) {
+    fprintf(stderr, "Error loading RGBD camera parameters from %s.\n",
+      FLAGS_calibration_dir.c_str());
+    return 1;
+  }
 
   auto aruco_poses = LoadPoses("d:/tmp/slf/still_life_00002/aruco.pose");
   auto sfm_aligned_poses = LoadPoses("d:/tmp/slf/still_life_00002/sfm.aligned.pose");
@@ -68,8 +75,8 @@ int main(int argc, char* argv[]) {
   }
 #endif
 
-  main_widget.addCameraPath(aruco_transforms, rgbd_params.color, red, red);
-  main_widget.addCameraPath(lerp_path, rgbd_params.color, blue, blue);
+  main_widget.addCameraPath(aruco_transforms, camera_params.color, red, red);
+  main_widget.addCameraPath(lerp_path, camera_params.color, blue, blue);
 
   return app.exec();
 }

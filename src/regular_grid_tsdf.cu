@@ -17,6 +17,9 @@
 
 #include <gflags/gflags.h>
 
+#include "libcgt/core/common/ArrayUtils.h"
+#include "libcgt/core/io/BinaryFileInputStream.h"
+#include "libcgt/core/io/BinaryFileOutputStream.h"
 #include "libcgt/cuda/Event.h"
 #include "libcgt/cuda/MathUtils.h"
 #include "libcgt/cuda/VecmathConversions.h"
@@ -25,6 +28,7 @@
 #include "marching_cubes.h"
 #include "raycast.h"
 
+using libcgt::core::arrayutils::flatten;
 using libcgt::core::vecmath::SimilarityTransform;
 using libcgt::core::vecmath::inverse;
 using libcgt::cuda::Event;
@@ -40,7 +44,6 @@ RegularGridTSDF::RegularGridTSDF(const Vector3i& resolution,
 RegularGridTSDF::RegularGridTSDF(const Vector3i& resolution,
   const SimilarityTransform& world_from_grid, float max_tsdf_value) :
   device_grid_(resolution),
-  bounding_box_(resolution),
   world_from_grid_(world_from_grid),
   grid_from_world_(inverse(world_from_grid)),
   max_tsdf_value_(max_tsdf_value) {
@@ -64,7 +67,7 @@ const SimilarityTransform& RegularGridTSDF::WorldFromGrid() const {
 }
 
 Box3f RegularGridTSDF::BoundingBox() const {
-  return bounding_box_;
+  return Box3f(device_grid_.size());
 }
 
 Vector3i RegularGridTSDF::Resolution() const {
@@ -268,4 +271,74 @@ TriangleMesh RegularGridTSDF::Triangulate() const {
     positions, normals);
 
   return ConstructMarchingCubesMesh(positions, normals);
+}
+
+bool RegularGridTSDF::Load(const std::string& filename) {
+  // TODO: validate input at each step..
+  BinaryFileInputStream in(filename);
+
+  uint8_t header;
+  in.read(header);
+  in.read(header);
+  in.read(header);
+  in.read(header);
+  in.read(header);
+  in.read(header);
+
+  int32_t version;
+  in.read(version);
+
+  Vector3i resolution;
+  in.read(resolution);
+
+  Matrix4f world_from_grid_matrix;
+  in.read(world_from_grid_matrix);
+
+  float max_tsdf_value;
+  in.read(max_tsdf_value);
+
+  Array3D<TSDF> data(resolution);
+  in.readArray(flatten(data.writeView()));
+
+  world_from_grid_ = SimilarityTransform::fromMatrix(world_from_grid_matrix);
+  grid_from_world_ = inverse(world_from_grid_);
+
+  copy(data.readView(), device_grid_);
+
+  max_tsdf_value_ = max_tsdf_value;
+
+  return true;
+}
+
+bool RegularGridTSDF::Save(const std::string& filename) const {
+  // TODO: check ok after each write.
+  BinaryFileOutputStream out(filename);
+
+  // TODO: check that the stream is valid.
+
+  // Write magic header: 'tsdf3d1'.
+  out.write('t');
+  out.write('s');
+  out.write('d');
+  out.write('f');
+  out.write('3');
+  out.write('d');
+  out.write<int32_t>(1);
+
+  // Write resolution: x, y, z.
+  out.write(device_grid_.size());
+
+  // Write world from grid transformation as a 4x4 float32 matrix,
+  // stored column major.
+  out.write(world_from_grid_.asMatrix());
+
+  // Write max tsdf value.
+  out.write(max_tsdf_value_);
+
+  // Write data.
+  Array3D<TSDF> data(device_grid_.size());
+  copy(device_grid_, data.writeView());
+  out.writeArray(flatten(data.readView()));
+
+  return out.close();
 }

@@ -139,7 +139,7 @@ void MainController::OnResetClicked() {
 void MainController::OnSaveMeshClicked(QString filename) {
   if (FLAGS_mode == "single_moving") {
     TriangleMesh mesh = pipeline_->Triangulate();
-    bool succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+    bool succeeded = mesh.saveOBJ(filename.toStdString());
     if (!succeeded) {
       QMessageBox::critical(main_widget_, "Save Mesh Status",
         "Failed to save to: " + filename);
@@ -148,7 +148,7 @@ void MainController::OnSaveMeshClicked(QString filename) {
     // HACK: rot180
     Matrix4f rot180 = Matrix4f::rotateX(static_cast<float>(M_PI));
     TriangleMesh mesh = msc_pipeline_->Triangulate(rot180);
-    bool succeeded = mesh.saveOBJ(filename.toStdString().c_str());
+    bool succeeded = mesh.saveOBJ(filename.toStdString());
     if (!succeeded) {
       QMessageBox::critical(main_widget_, "Save Mesh Status",
         "Failed to save to: " + filename);
@@ -216,12 +216,5 @@ void MainController::OnEndOfStream() {
       PortableFloatMapIO::write(flipY(world_normals.readView()),
         world_normals_filename);
     }
-  }
-
-  if (FLAGS_sm_output_mesh != "") {
-    OnSaveMeshClicked(QString::fromStdString(FLAGS_sm_output_mesh));
-  }
-  if (FLAGS_sm_output_pose != "") {
-    OnSavePoseClicked(QString::fromStdString(FLAGS_sm_output_pose));
   }
 }
