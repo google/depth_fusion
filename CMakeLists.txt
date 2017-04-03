@@ -63,7 +63,7 @@ set( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-gencode arch=compute_60,code=sm_60" )
 set( DEPTH_FUSION_HEADERS
     src/aruco/aruco_pose_estimator.h
     src/aruco/cube_fiducial.h
-	src/aruco/single_marker_fiducial.h
+    src/aruco/single_marker_fiducial.h
     src/calibrated_posed_depth_camera.h
     src/control_widget.h
     src/depth_processor.h
@@ -76,7 +76,7 @@ set( DEPTH_FUSION_HEADERS
     src/multi_static_camera_gl_state.h
     src/multi_static_camera_pipeline.h
     src/pipeline_data_type.h
-	src/pose_estimation_method.h
+    src/pose_estimation_method.h
     src/pose_frame.h
     src/pose_utils.h
     src/projective_point_plane_icp.h
@@ -93,7 +93,7 @@ set( DEPTH_FUSION_SOURCES_CPP
     src/depth_fusion.cpp
     src/aruco/aruco_pose_estimator.cpp
     src/aruco/cube_fiducial.cpp
-	src/aruco/single_marker_fiducial.cpp
+    src/aruco/single_marker_fiducial.cpp
     src/control_widget.cpp
     src/icp_least_squares_data.cpp
     src/input_buffer.cpp
@@ -132,12 +132,12 @@ target_link_libraries( depth_fusion
     ${CUDA_LIBRARIES}
     Qt5::Core Qt5::OpenGL Qt5::Widgets
     ${OpenCV_LIBS}
-	cgt_core
+    cgt_core
     cgt_cuda
     cgt_gl
     cgt_camera_wrappers
     cgt_opencv_interop
-    cgt_qt_interop	
+    cgt_qt_interop
 )
 
 # align_nvm_pose_cli executable
@@ -147,40 +147,40 @@ add_executable( align_nvm_pose_cli
 target_include_directories( align_nvm_pose_cli PRIVATE . )
 target_link_libraries( align_nvm_pose_cli
     gflags
-	cgt_core
+    cgt_core
     cgt_camera_wrappers
 )
 
 # interpolate_depth_pose_cli executable
 add_executable( interpolate_depth_pose_cli
     src/interpolate_depth_pose/interpolate_depth_pose_cli.cpp
-	src/rgbd_camera_parameters.h
-	src/rgbd_camera_parameters.cpp
+    src/rgbd_camera_parameters.h
+    src/rgbd_camera_parameters.cpp
 )
 target_include_directories( interpolate_depth_pose_cli PRIVATE . )
 target_link_libraries( interpolate_depth_pose_cli
     gflags
-	${OpenCV_LIBS}
-	cgt_core
+    ${OpenCV_LIBS}
+    cgt_core
     cgt_camera_wrappers
-	cgt_opencv_interop
+    cgt_opencv_interop
 )
 
 # aruco_estimate_pose_cli executable
 add_executable( aruco_estimate_pose_cli
     src/aruco/aruco_estimate_pose_cli.cpp
-	src/aruco/aruco_pose_estimator.h
-	src/aruco/aruco_pose_estimator.cpp
-	src/aruco/cube_fiducial.h
-	src/aruco/cube_fiducial.cpp
-	src/aruco/single_marker_fiducial.h
-	src/aruco/single_marker_fiducial.cpp
-	src/input_buffer.h
-	src/input_buffer.cpp
-	src/rgbd_camera_parameters.h
-	src/rgbd_camera_parameters.cpp
-	src/rgbd_input.h
-	src/rgbd_input.cpp
+    src/aruco/aruco_pose_estimator.h
+    src/aruco/aruco_pose_estimator.cpp
+    src/aruco/cube_fiducial.h
+    src/aruco/cube_fiducial.cpp
+    src/aruco/single_marker_fiducial.h
+    src/aruco/single_marker_fiducial.cpp
+    src/input_buffer.h
+    src/input_buffer.cpp
+    src/rgbd_camera_parameters.h
+    src/rgbd_camera_parameters.cpp
+    src/rgbd_input.h
+    src/rgbd_input.cpp
 )
 target_include_directories( aruco_estimate_pose_cli PRIVATE . )
 target_link_libraries( aruco_estimate_pose_cli
@@ -188,19 +188,19 @@ target_link_libraries( aruco_estimate_pose_cli
     opengl32 GLEW::GLEW
     Qt5::Core Qt5::OpenGL Qt5::Widgets
     ${OpenCV_LIBS}
-	cgt_core
+    cgt_core
     cgt_cuda
     cgt_gl
     cgt_camera_wrappers
     cgt_opencv_interop
-    cgt_qt_interop	
+    cgt_qt_interop
 )
 
 add_executable( visualize_camera_path_cli
-	src/rgbd_camera_parameters.h
-	src/rgbd_camera_parameters.cpp
-	src/visualize_camera_path/main_widget.h
-	src/visualize_camera_path/main_widget.cpp
+    src/rgbd_camera_parameters.h
+    src/rgbd_camera_parameters.cpp
+    src/visualize_camera_path/main_widget.h
+    src/visualize_camera_path/main_widget.cpp
     src/visualize_camera_path/visualize_camera_path_cli.cpp )
 target_include_directories( visualize_camera_path_cli PRIVATE . )
 target_link_libraries( visualize_camera_path_cli
@@ -208,19 +208,19 @@ target_link_libraries( visualize_camera_path_cli
     opengl32 GLEW::GLEW
     Qt5::Core Qt5::OpenGL Qt5::Widgets
     ${OpenCV_LIBS}
-	cgt_core
+    cgt_core
     cgt_cuda
     cgt_gl
     cgt_camera_wrappers
     cgt_opencv_interop
-    cgt_qt_interop	
+    cgt_qt_interop
 )
 
 # fuse_depth_cli executable
 set( FUSE_DEPTH_CLI_HEADERS
     src/aruco/aruco_pose_estimator.h
     src/aruco/cube_fiducial.h
-	src/aruco/single_marker_fiducial.h
+    src/aruco/single_marker_fiducial.h
     src/calibrated_posed_depth_camera.h
     src/depth_processor.h
     src/fuse.h
@@ -228,7 +228,7 @@ set( FUSE_DEPTH_CLI_HEADERS
     src/input_buffer.h
     src/marching_cubes.h
     src/pipeline_data_type.h
-	src/pose_estimation_method.h
+    src/pose_estimation_method.h
     src/pose_frame.h
     src/pose_utils.h
     src/projective_point_plane_icp.h
@@ -241,10 +241,10 @@ set( FUSE_DEPTH_CLI_HEADERS
 )
 
 set( FUSE_DEPTH_CLI_SOURCES_CPP
-	src/fuse_depth/fuse_depth_cli.cpp
+    src/fuse_depth/fuse_depth_cli.cpp
     src/aruco/aruco_pose_estimator.cpp
     src/aruco/cube_fiducial.cpp
-	src/aruco/single_marker_fiducial.cpp
+    src/aruco/single_marker_fiducial.cpp
     src/icp_least_squares_data.cpp
     src/input_buffer.cpp
     src/marching_cubes.cpp
@@ -277,12 +277,12 @@ target_link_libraries( fuse_depth_cli
     ${CUDA_LIBRARIES}
     Qt5::Core Qt5::OpenGL Qt5::Widgets
     ${OpenCV_LIBS}
-	cgt_core
+    cgt_core
     cgt_cuda
     cgt_gl
     cgt_camera_wrappers
     cgt_opencv_interop
-    cgt_qt_interop	
+    cgt_qt_interop
 )
 
 # TODO: make this build on Linux. It might need -l GL.
