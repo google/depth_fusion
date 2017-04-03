@@ -240,7 +240,7 @@ void RaycastKernel(KernelArray3D<const TSDF> regular_grid,
   float3 prev_coords_grid = {};
   float2 prev_sdf = {};
 
-  float curr_t = t_near;
+  float curr_t = t_start;
   float3 curr_coords_grid = eye_grid + curr_t * dir_grid;
   float2 curr_sdf =
     TrilinearSample(regular_grid, curr_coords_grid, max_tsdf_value);
@@ -352,7 +352,7 @@ void AdaptiveRaycastKernel(KernelArray3D<const TSDF> regular_grid,
   float3 prev_coords_grid = {};
   float2 prev_sdf = {};
 
-  float curr_t = t_near;
+  float curr_t = t_start;
   float3 curr_coords_grid = eye_grid + curr_t * dir_grid;
   float2 curr_sdf =
     TrilinearSample(regular_grid, curr_coords_grid, max_tsdf_value);
