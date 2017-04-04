@@ -29,17 +29,17 @@ using libcgt::core::vecmath::SimilarityTransform;
 
 // Inputs.
 DEFINE_string(calibration_dir, "",
-  "REQUIRED: calibration directory for the RGBD camera.");
+  "[Required] calibration directory for the RGBD camera.");
 DEFINE_string(input_rgbd, "",
-  "REQUIRED: input .rgbd file.");
+  "[Required] input .rgbd file.");
 DEFINE_string(pose_estimator, "color_aruco_and_depth_icp",
-  "REQUIRED: Pose estimator. Valid options: \"color_aruco\", \"depth_icp\", "
+  "[Required] Pose estimator. Valid options: \"color_aruco\", \"depth_icp\", "
   "\"color_aruco_and_depth_icp\", \"precomputed\" or "
   "\"precomputed_refine_with_depth_icp\"."
   "If \"precomputed\" or \"precomputed_refine_with_depth_icp\", "
   "--precomputed_pose is required.");
 DEFINE_string(precomputed_pose, "",
-  "OPTIONAL: precomputed pose file.");
+  "[Optional] precomputed pose file.");
 
 // Outputs.
 DEFINE_string(output_mesh, "",

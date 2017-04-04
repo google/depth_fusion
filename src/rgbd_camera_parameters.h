@@ -62,11 +62,12 @@ struct RGBDCameraParameters {
     const EuclideanTransform& color_camera_from_world) const;
 };
 
-// Load a CameraParameters object from an already-opened OpenCV FileStorage
-// object. Reads the keys:
-// <namePrefix>{ImageSize, CameraMatrix_gl, DistCoeffs}.
-CameraParameters LoadCameraIntrinsics(const cv::FileStorage& fs,
-	const std::string& namePrefix);
+// Load a RGBDCameraParameters from a .yaml file.
+//
+// On success, populates params and returns true.
+// Otherwise, returns false.
+bool LoadCameraParameters(const std::string& yaml,
+  CameraParameters* params);
 
 // Load a RGBDCameraParameters from a directory containing:
 // <dir>/stereo_calibration.yaml,

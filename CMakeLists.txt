@@ -285,6 +285,55 @@ target_link_libraries( fuse_depth_cli
     cgt_qt_interop
 )
 
+# raycast_volume_cli executable
+set( RAYCAST_VOLUME_CLI_HEADERS
+    src/pose_estimation_method.h
+    src/pose_frame.h
+    src/pose_utils.h
+    src/raycast.h
+	src/rgbd_camera_parameters.h
+    src/tsdf.h
+)
+
+set( RAYCAST_VOLUME_CLI_SOURCES_CPP
+    src/raycast_volume/raycast_volume_cli.cpp
+    src/pose_utils.cpp
+	src/rgbd_camera_parameters.cpp
+	# TODO: ugh, this is a method on regular_grid_tsdf.cu
+	src/marching_cubes.cpp
+)
+
+set( RAYCAST_VOLUME_CLI_SOURCES_CU
+    src/raycast.cu
+    src/regular_grid_tsdf.cu
+	# TODO: ugh, this is a method on regular_grid_tsdf.cu
+	src/fuse.cu
+)
+
+cuda_add_executable( raycast_volume_cli
+    ${RAYCAST_VOLUME_CLI_HEADERS}
+    ${RAYCAST_VOLUME_CLI_SOURCES_CPP}
+    ${RAYCAST_VOLUME_CLI_SOURCES_CU}
+)
+set_property( TARGET raycast_volume_cli PROPERTY CXX_STANDARD 11 )
+target_compile_definitions( raycast_volume_cli
+    PRIVATE _USE_MATH_DEFINES )
+target_include_directories( raycast_volume_cli PRIVATE . )
+target_link_libraries( raycast_volume_cli
+    gflags
+    opengl32 GLEW::GLEW
+    ${CUDA_LIBRARIES}
+    Qt5::Core Qt5::OpenGL Qt5::Widgets
+    ${OpenCV_LIBS}
+    cgt_core
+    cgt_cuda
+    cgt_gl
+    cgt_camera_wrappers
+    cgt_opencv_interop
+    cgt_qt_interop
+)
+
+
 # TODO: make this build on Linux. It might need -l GL.
 #target_link_libraries( depth_fusion GL GLEW::GLEW Qt5::Core Qt5::OpenGL
 #    Qt5::Widgets ${OpenCV_LIBS} cgt_core cgt_gl cgt_opencv_interop libpxc )

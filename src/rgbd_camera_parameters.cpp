@@ -24,6 +24,8 @@ using namespace libcgt::core::vecmath;
 
 using libcgt::opencv_interop::cameraMatrixToIntrinsics;
 
+namespace {
+
 CameraParameters LoadCameraIntrinsics(const cv::FileStorage& fs,
 	const std::string& namePrefix) {
 	CameraParameters params = {};
@@ -52,6 +54,8 @@ CameraParameters LoadCameraIntrinsics(const cv::FileStorage& fs,
 	return params;
 }
 
+}  // namespace
+
 EuclideanTransform LoadEuclideanTransform(const cv::FileStorage& fs,
 	const std::string& namePrefix) {
 	cv::Mat r;
@@ -67,12 +71,54 @@ EuclideanTransform LoadEuclideanTransform(const cv::FileStorage& fs,
 	};
 }
 
+// TODO: clean up how we load calibration data. Allow passing in a
+// precomputed undistortion map.
+bool LoadCameraParameters(const std::string& yaml,
+  CameraParameters* params) {
+  cv::FileStorage fs(yaml, cv::FileStorage::READ);
+  if (!fs.isOpened()) {
+    return false;
+  }
+
+  *params = {};
+
+	cv::Size image_size;
+	cv::Mat intrinsics_matrix_gl;
+	cv::Mat dist_coeffs;
+  cv::Mat undistorted_intrinsics_matrix_gl;
+
+	fs["imageSize"] >> image_size;
+	fs["cameraMatrix_gl"] >> intrinsics_matrix_gl;
+	fs["distCoeffs"] >> dist_coeffs;
+  fs["newCameraMatrix_gl" ] >> undistorted_intrinsics_matrix_gl;
+
+	params->resolution = { image_size.width, image_size.height };
+
+  params->intrinsics = cameraMatrixToIntrinsics(intrinsics_matrix_gl);
+	for (int i = 0; i < 5; ++i) {
+		params->dist_coeffs.push_back(
+			static_cast<float>(dist_coeffs.at<double>(0, i)));
+	}
+
+  params->undistorted_intrinsics = cameraMatrixToIntrinsics(
+    undistorted_intrinsics_matrix_gl);
+
+#if 0
+  auto res = PortableFloatMapIO::read(undistort_map_gl_filename);
+  if (!res.valid) {
+    return false;
+  }
+	params->undistortion_map = res.rg;
+#endif
+
+	return params;
+}
+
 bool LoadRGBDCameraParameters(const std::string& dir,
   RGBDCameraParameters* params) {
 	cv::FileStorage fs(
 		os::path::join(dir, "stereo_calibration.yaml"),
 		cv::FileStorage::READ);
-
   if (!fs.isOpened()) {
     return false;
   }
